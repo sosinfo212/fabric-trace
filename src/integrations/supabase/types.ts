@@ -172,6 +172,42 @@ export type Database = {
           },
         ]
       }
+      products: {
+        Row: {
+          component_code: string | null
+          component_name: string | null
+          created_at: string
+          id: string
+          image_url: string | null
+          product_name: string
+          quantity: number
+          ref_id: string
+          updated_at: string
+        }
+        Insert: {
+          component_code?: string | null
+          component_name?: string | null
+          created_at?: string
+          id?: string
+          image_url?: string | null
+          product_name: string
+          quantity?: number
+          ref_id: string
+          updated_at?: string
+        }
+        Update: {
+          component_code?: string | null
+          component_name?: string | null
+          created_at?: string
+          id?: string
+          image_url?: string | null
+          product_name?: string
+          quantity?: number
+          ref_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
