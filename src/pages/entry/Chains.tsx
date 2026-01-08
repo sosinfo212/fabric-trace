@@ -147,8 +147,8 @@ export default function ChainsPage() {
 
       const { error } = await supabase.from('chaines').insert({
         num_chaine: parseInt(formNumChaine),
-        responsable_qlty_id: formResponsableQlty || null,
-        chef_de_chaine_id: formChefDeChaine || null,
+        responsable_qlty_id: formResponsableQlty && formResponsableQlty !== '__none__' ? formResponsableQlty : null,
+        chef_de_chaine_id: formChefDeChaine && formChefDeChaine !== '__none__' ? formChefDeChaine : null,
         nbr_operateur: parseInt(formNbrOperateur),
       });
 
@@ -180,8 +180,8 @@ export default function ChainsPage() {
         .from('chaines')
         .update({
           num_chaine: parseInt(formNumChaine),
-          responsable_qlty_id: formResponsableQlty || null,
-          chef_de_chaine_id: formChefDeChaine || null,
+          responsable_qlty_id: formResponsableQlty && formResponsableQlty !== '__none__' ? formResponsableQlty : null,
+          chef_de_chaine_id: formChefDeChaine && formChefDeChaine !== '__none__' ? formChefDeChaine : null,
           nbr_operateur: parseInt(formNbrOperateur),
         })
         .eq('id', selectedChaine.id);
@@ -229,8 +229,8 @@ export default function ChainsPage() {
   const openEditDialog = (chaine: Chaine) => {
     setSelectedChaine(chaine);
     setFormNumChaine(chaine.num_chaine.toString());
-    setFormResponsableQlty(chaine.responsable_qlty_id || '');
-    setFormChefDeChaine(chaine.chef_de_chaine_id || '');
+    setFormResponsableQlty(chaine.responsable_qlty_id || '__none__');
+    setFormChefDeChaine(chaine.chef_de_chaine_id || '__none__');
     setFormNbrOperateur(chaine.nbr_operateur.toString());
     setIsEditOpen(true);
   };
@@ -306,7 +306,7 @@ export default function ChainsPage() {
                       <SelectValue placeholder="Sélectionner un responsable" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Aucun</SelectItem>
+                      <SelectItem value="__none__">Aucun</SelectItem>
                       {profiles.map((p) => (
                         <SelectItem key={p.id} value={p.id}>
                           {p.full_name || p.email}
@@ -322,7 +322,7 @@ export default function ChainsPage() {
                       <SelectValue placeholder="Sélectionner un chef" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Aucun</SelectItem>
+                      <SelectItem value="__none__">Aucun</SelectItem>
                       {profiles.map((p) => (
                         <SelectItem key={p.id} value={p.id}>
                           {p.full_name || p.email}
@@ -471,7 +471,7 @@ export default function ChainsPage() {
                     <SelectValue placeholder="Sélectionner un responsable" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Aucun</SelectItem>
+                    <SelectItem value="__none__">Aucun</SelectItem>
                     {profiles.map((p) => (
                       <SelectItem key={p.id} value={p.id}>
                         {p.full_name || p.email}
@@ -487,7 +487,7 @@ export default function ChainsPage() {
                     <SelectValue placeholder="Sélectionner un chef" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Aucun</SelectItem>
+                    <SelectItem value="__none__">Aucun</SelectItem>
                     {profiles.map((p) => (
                       <SelectItem key={p.id} value={p.id}>
                         {p.full_name || p.email}
