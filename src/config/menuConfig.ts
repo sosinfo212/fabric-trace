@@ -69,7 +69,6 @@ export const menuConfig: MenuSection[] = [
       { title: 'Liste des Défauts', url: '/entry/defects', icon: AlertTriangle, roles: ['admin'] },
       { title: 'Chaînes', url: '/entry/chains', icon: Link, roles: ['admin'] },
       { title: 'Produits', url: '/entry/products', icon: Package, roles: ['admin', 'responsable_magasin_pf'] },
-      { title: 'Importation (Odoo)', url: '/entry/import', icon: Download, roles: ['admin'] },
     ],
   },
   {
