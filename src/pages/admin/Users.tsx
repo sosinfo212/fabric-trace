@@ -165,43 +165,47 @@ export default function UsersPage() {
 
       setSubmitting(true);
 
-      // Create user via Supabase Auth
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: inviteEmail,
-        password: invitePassword,
-        options: {
-          emailRedirectTo: `${window.location.origin}/`,
-          data: {
-            full_name: inviteFullName,
-          },
+      // Get current session token
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        toast({
+          title: 'Erreur',
+          description: 'Session expirée. Veuillez vous reconnecter.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      // Call edge function to create user without affecting current session
+      const response = await supabase.functions.invoke('create-user', {
+        body: {
+          email: inviteEmail,
+          password: invitePassword,
+          full_name: inviteFullName,
+          role: inviteRole,
         },
       });
 
-      if (authError) throw authError;
-
-      if (authData.user) {
-        // Update role if not default operator
-        if (inviteRole !== 'operator') {
-          const { error: roleError } = await supabase
-            .from('user_roles')
-            .update({ role: inviteRole })
-            .eq('user_id', authData.user.id);
-
-          if (roleError) throw roleError;
-        }
-
-        toast({
-          title: 'Succès',
-          description: 'Utilisateur créé avec succès',
-        });
-
-        setIsInviteOpen(false);
-        setInviteEmail('');
-        setInvitePassword('');
-        setInviteFullName('');
-        setInviteRole('operator');
-        fetchUsers();
+      if (response.error) {
+        throw new Error(response.error.message);
       }
+
+      if (response.data?.error) {
+        throw new Error(response.data.error);
+      }
+
+      toast({
+        title: 'Succès',
+        description: 'Utilisateur créé avec succès',
+      });
+
+      setIsInviteOpen(false);
+      setInviteEmail('');
+      setInvitePassword('');
+      setInviteFullName('');
+      setInviteRole('operator');
+      fetchUsers();
     } catch (error: any) {
       console.error('Error creating user:', error);
       toast({
