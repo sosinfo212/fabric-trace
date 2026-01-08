@@ -70,6 +70,8 @@ export default function ChainsPage() {
 
   const [chaines, setChaines] = useState<Chaine[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [agentQualiteProfiles, setAgentQualiteProfiles] = useState<Profile[]>([]);
+  const [chefDeChaineProfiles, setChefDeChaineProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -105,8 +107,24 @@ export default function ChainsPage() {
 
       if (profilesError) throw profilesError;
 
+      // Fetch user roles to filter profiles by role
+      const { data: userRolesData, error: rolesError } = await supabase
+        .from('user_roles')
+        .select('user_id, role');
+
+      if (rolesError) throw rolesError;
+
+      const allProfiles = profilesData || [];
+      const userRoles = userRolesData || [];
+
+      // Filter profiles by role
+      const agentQualiteIds = userRoles.filter(r => r.role === 'agent_qualite').map(r => r.user_id);
+      const chefDeChaineIds = userRoles.filter(r => r.role === 'chef_de_chaine').map(r => r.user_id);
+
       setChaines(chainesData || []);
-      setProfiles(profilesData || []);
+      setProfiles(allProfiles);
+      setAgentQualiteProfiles(allProfiles.filter(p => agentQualiteIds.includes(p.id)));
+      setChefDeChaineProfiles(allProfiles.filter(p => chefDeChaineIds.includes(p.id)));
     } catch (error) {
       console.error('Error fetching data:', error);
       toast({
@@ -307,7 +325,7 @@ export default function ChainsPage() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="__none__">Aucun</SelectItem>
-                      {profiles.map((p) => (
+                      {agentQualiteProfiles.map((p) => (
                         <SelectItem key={p.id} value={p.id}>
                           {p.full_name || p.email}
                         </SelectItem>
@@ -323,7 +341,7 @@ export default function ChainsPage() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="__none__">Aucun</SelectItem>
-                      {profiles.map((p) => (
+                      {chefDeChaineProfiles.map((p) => (
                         <SelectItem key={p.id} value={p.id}>
                           {p.full_name || p.email}
                         </SelectItem>
@@ -472,7 +490,7 @@ export default function ChainsPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__none__">Aucun</SelectItem>
-                    {profiles.map((p) => (
+                    {agentQualiteProfiles.map((p) => (
                       <SelectItem key={p.id} value={p.id}>
                         {p.full_name || p.email}
                       </SelectItem>
@@ -488,7 +506,7 @@ export default function ChainsPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__none__">Aucun</SelectItem>
-                    {profiles.map((p) => (
+                    {chefDeChaineProfiles.map((p) => (
                       <SelectItem key={p.id} value={p.id}>
                         {p.full_name || p.email}
                       </SelectItem>
