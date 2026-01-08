@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      clients: {
+        Row: {
+          created_at: string
+          designation: string | null
+          id: string
+          instruction: string | null
+          instruction_logistique: string | null
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          designation?: string | null
+          id?: string
+          instruction?: string | null
+          instruction_logistique?: string | null
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          designation?: string | null
+          id?: string
+          instruction?: string | null
+          instruction_logistique?: string | null
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       custom_roles: {
         Row: {
           created_at: string
