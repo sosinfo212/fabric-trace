@@ -30,7 +30,7 @@ export default function FabOrderViewPage() {
 
   const canAccess = hasAccess(['admin', 'chef_chaine', 'chef_de_chaine', 'controle']);
 
-  // Fetch order with relations
+  // Fetch order with chaine relation only
   const { data: order, isLoading } = useQuery({
     queryKey: ['fab-order', id],
     queryFn: async () => {
@@ -38,8 +38,6 @@ export default function FabOrderViewPage() {
         .from('fab_orders')
         .select(`
           *,
-          products:product_id (id, ref_id, product_name),
-          clients:client_id (id, name, designation),
           chaines:chaine_id (id, num_chaine)
         `)
         .eq('id', id)
@@ -153,9 +151,7 @@ export default function FabOrderViewPage() {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Client</p>
-                  <p className="font-medium">
-                    {order.clients?.designation || order.clients?.name || '-'}
-                  </p>
+                  <p className="font-medium">{order.client_id || '-'}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Chaîne</p>
@@ -197,15 +193,11 @@ export default function FabOrderViewPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm text-muted-foreground">Nom du Produit</p>
-                  <p className="font-medium">
-                    {order.products?.product_name || order.prod_name || '-'}
-                  </p>
+                  <p className="font-medium">{order.prod_name || '-'}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Référence</p>
-                  <p className="font-medium font-mono">
-                    {order.products?.ref_id || order.prod_ref || '-'}
-                  </p>
+                  <p className="font-medium font-mono">{order.prod_ref || '-'}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Lot/Set</p>

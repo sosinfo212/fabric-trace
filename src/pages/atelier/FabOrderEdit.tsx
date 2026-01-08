@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
@@ -27,6 +27,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { SearchableCombobox, ComboboxOption } from '@/components/ui/searchable-combobox';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { toast } from '@/hooks/use-toast';
@@ -39,7 +40,6 @@ const STATUS_OPTIONS = ['Planifié', 'En cours', 'Réalisé', 'Cloturé', 'Suspe
 
 const formSchema = z.object({
   of_id: z.string().min(1, 'OF ID requis').max(255),
-  product_id: z.string().optional(),
   prod_ref: z.string().max(255).optional(),
   prod_name: z.string().max(255).optional(),
   chaine_id: z.string().min(1, 'Chaîne requise'),
@@ -63,7 +63,7 @@ export default function FabOrderEditPage() {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
   const { user, loading: authLoading } = useAuth();
-  const { role, loading: roleLoading, hasAccess } = useUserRole();
+  const { loading: roleLoading, hasAccess } = useUserRole();
 
   const canAccess = hasAccess(['admin', 'chef_chaine', 'chef_de_chaine', 'controle']);
   const isAdmin = hasAccess(['admin']);
@@ -121,8 +121,22 @@ export default function FabOrderEditPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('clients')
-        .select('id, name, designation')
+        .select('id, name, designation, instruction')
         .order('name');
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user,
+  });
+
+  // Fetch commandes
+  const { data: commandes } = useQuery({
+    queryKey: ['commandes'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('commandes')
+        .select('id, num_commande')
+        .order('num_commande');
       if (error) throw error;
       return data;
     },
@@ -143,12 +157,48 @@ export default function FabOrderEditPage() {
     enabled: !!user,
   });
 
+  // Prepare options for comboboxes
+  const commandeOptions: ComboboxOption[] = useMemo(() => 
+    commandes?.map(c => ({
+      value: c.num_commande,
+      label: c.num_commande,
+      searchTerms: [c.num_commande],
+    })) || [],
+    [commandes]
+  );
+
+  const clientOptions: ComboboxOption[] = useMemo(() => 
+    clients?.map(c => ({
+      value: c.name,
+      label: c.designation || c.name,
+      searchTerms: [c.name, c.designation || ''],
+    })) || [],
+    [clients]
+  );
+
+  const chaineOptions: ComboboxOption[] = useMemo(() => 
+    chaines?.map(c => ({
+      value: c.id,
+      label: `Chaîne ${c.num_chaine}`,
+      searchTerms: [`Chaîne ${c.num_chaine}`, String(c.num_chaine)],
+    })) || [],
+    [chaines]
+  );
+
+  const productOptions: ComboboxOption[] = useMemo(() => 
+    products?.map(p => ({
+      value: p.id,
+      label: `${p.product_name} (${p.ref_id})`,
+      searchTerms: [p.product_name, p.ref_id],
+    })) || [],
+    [products]
+  );
+
   // Populate form when order loads
   useEffect(() => {
     if (order) {
       form.reset({
         of_id: order.of_id,
-        product_id: order.product_id || undefined,
         prod_ref: order.prod_ref || '',
         prod_name: order.prod_name || '',
         chaine_id: order.chaine_id,
@@ -174,7 +224,6 @@ export default function FabOrderEditPage() {
         .from('fab_orders')
         .update({
           of_id: values.of_id,
-          product_id: values.product_id || null,
           prod_ref: values.prod_ref || null,
           prod_name: values.prod_name || null,
           chaine_id: values.chaine_id,
@@ -204,9 +253,17 @@ export default function FabOrderEditPage() {
     },
   });
 
-  // Auto-fill product info when product is selected
+  // Handle client change - fill instruction
+  const handleClientChange = (clientName: string) => {
+    form.setValue('client_id', clientName);
+    const client = clients?.find((c) => c.name === clientName);
+    if (client?.instruction) {
+      form.setValue('instruction', client.instruction);
+    }
+  };
+
+  // Handle product change - fill ref and name
   const handleProductChange = (productId: string) => {
-    form.setValue('product_id', productId);
     const product = products?.find((p) => p.id === productId);
     if (product) {
       form.setValue('prod_ref', product.ref_id);
@@ -291,7 +348,14 @@ export default function FabOrderEditPage() {
                       <FormItem>
                         <FormLabel>N° Commande *</FormLabel>
                         <FormControl>
-                          <Input placeholder="CMD-001" {...field} />
+                          <SearchableCombobox
+                            options={commandeOptions}
+                            value={field.value}
+                            onValueChange={field.onChange}
+                            placeholder="Sélectionner une commande"
+                            searchPlaceholder="Rechercher une commande..."
+                            emptyText="Aucune commande trouvée"
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -304,20 +368,16 @@ export default function FabOrderEditPage() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Client *</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Sélectionner un client" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {clients?.map((client) => (
-                              <SelectItem key={client.id} value={client.id}>
-                                {client.designation || client.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <FormControl>
+                          <SearchableCombobox
+                            options={clientOptions}
+                            value={field.value}
+                            onValueChange={handleClientChange}
+                            placeholder="Sélectionner un client"
+                            searchPlaceholder="Rechercher un client..."
+                            emptyText="Aucun client trouvé"
+                          />
+                        </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -329,53 +389,33 @@ export default function FabOrderEditPage() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Chaîne *</FormLabel>
-                        <Select 
-                          onValueChange={field.onChange} 
-                          value={field.value}
-                          disabled={!isAdmin && order.chaine_id !== field.value}
-                        >
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Sélectionner une chaîne" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {chaines?.map((chaine) => (
-                              <SelectItem key={chaine.id} value={chaine.id}>
-                                Chaîne {chaine.num_chaine}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <FormControl>
+                          <SearchableCombobox
+                            options={chaineOptions}
+                            value={field.value}
+                            onValueChange={field.onChange}
+                            placeholder="Sélectionner une chaîne"
+                            searchPlaceholder="Rechercher une chaîne..."
+                            emptyText="Aucune chaîne trouvée"
+                            disabled={!isAdmin && order.chaine_id !== field.value}
+                          />
+                        </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
 
-                  <FormField
-                    control={form.control}
-                    name="product_id"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Produit</FormLabel>
-                        <Select onValueChange={handleProductChange} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Sélectionner un produit" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {products?.map((product) => (
-                              <SelectItem key={product.id} value={product.id}>
-                                {product.product_name} ({product.ref_id})
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  <FormItem>
+                    <FormLabel>Produit</FormLabel>
+                    <SearchableCombobox
+                      options={productOptions}
+                      value=""
+                      onValueChange={handleProductChange}
+                      placeholder="Sélectionner un produit"
+                      searchPlaceholder="Rechercher par nom ou référence..."
+                      emptyText="Aucun produit trouvé"
+                    />
+                  </FormItem>
 
                   <FormField
                     control={form.control}
@@ -550,7 +590,11 @@ export default function FabOrderEditPage() {
                     <FormItem>
                       <FormLabel>Instructions</FormLabel>
                       <FormControl>
-                        <Textarea rows={3} {...field} />
+                        <Textarea
+                          placeholder="Instructions spéciales..."
+                          className="min-h-[100px]"
+                          {...field}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -564,14 +608,18 @@ export default function FabOrderEditPage() {
                     <FormItem>
                       <FormLabel>Commentaire</FormLabel>
                       <FormControl>
-                        <Textarea rows={3} {...field} />
+                        <Textarea
+                          placeholder="Commentaires..."
+                          className="min-h-[100px]"
+                          {...field}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
 
-                <div className="flex justify-end gap-4">
+                <div className="flex gap-4">
                   <Button
                     type="button"
                     variant="outline"
@@ -583,7 +631,7 @@ export default function FabOrderEditPage() {
                     {updateMutation.isPending && (
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                     )}
-                    Mettre à jour
+                    Enregistrer
                   </Button>
                 </div>
               </form>
