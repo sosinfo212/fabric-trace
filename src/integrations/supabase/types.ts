@@ -74,6 +74,59 @@ export type Database = {
         }
         Relationships: []
       }
+      defaut_categories: {
+        Row: {
+          category_name: string
+          created_at: string
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          category_name: string
+          created_at?: string
+          id?: string
+          updated_at?: string
+        }
+        Update: {
+          category_name?: string
+          created_at?: string
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      defaut_list: {
+        Row: {
+          category_id: string
+          created_at: string
+          id: string
+          label: string
+          updated_at: string
+        }
+        Insert: {
+          category_id: string
+          created_at?: string
+          id?: string
+          label: string
+          updated_at?: string
+        }
+        Update: {
+          category_id?: string
+          created_at?: string
+          id?: string
+          label?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "defaut_list_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "defaut_categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string
