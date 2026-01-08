@@ -70,6 +70,7 @@ export default function ChainsPage() {
 
   const [chaines, setChaines] = useState<Chaine[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [qualityAgents, setQualityAgents] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -105,8 +106,21 @@ export default function ChainsPage() {
 
       if (profilesError) throw profilesError;
 
+      // Fetch users with agent_qualite role for Responsable Qualité dropdown
+      const { data: qualityAgentsData, error: qualityAgentsError } = await supabase
+        .from('user_roles')
+        .select('user_id, profiles(id, email, full_name)')
+        .eq('role', 'agent_qualite');
+
+      if (qualityAgentsError) throw qualityAgentsError;
+
+      const agents = (qualityAgentsData || [])
+        .map((ur: any) => ur.profiles)
+        .filter((p: Profile | null) => p !== null) as Profile[];
+
       setChaines(chainesData || []);
       setProfiles(profilesData || []);
+      setQualityAgents(agents);
     } catch (error) {
       console.error('Error fetching data:', error);
       toast({
@@ -307,7 +321,7 @@ export default function ChainsPage() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="__none__">Aucun</SelectItem>
-                      {profiles.map((p) => (
+                      {qualityAgents.map((p) => (
                         <SelectItem key={p.id} value={p.id}>
                           {p.full_name || p.email}
                         </SelectItem>
@@ -472,7 +486,7 @@ export default function ChainsPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__none__">Aucun</SelectItem>
-                    {profiles.map((p) => (
+                    {qualityAgents.map((p) => (
                       <SelectItem key={p.id} value={p.id}>
                         {p.full_name || p.email}
                       </SelectItem>
