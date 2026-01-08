@@ -117,14 +117,26 @@ export default function ChainsPage() {
       const allProfiles = profilesData || [];
       const userRoles = userRolesData || [];
 
+      console.log('All profiles:', allProfiles);
+      console.log('User roles:', userRoles);
+
       // Filter profiles by role
       const agentQualiteIds = userRoles.filter(r => r.role === 'agent_qualite').map(r => r.user_id);
       const chefDeChaineIds = userRoles.filter(r => r.role === 'chef_de_chaine').map(r => r.user_id);
 
+      console.log('Agent qualite IDs:', agentQualiteIds);
+      console.log('Chef de chaine IDs:', chefDeChaineIds);
+
+      const filteredAgentQualite = allProfiles.filter(p => agentQualiteIds.includes(p.id));
+      const filteredChefDeChaine = allProfiles.filter(p => chefDeChaineIds.includes(p.id));
+
+      console.log('Filtered agent qualite profiles:', filteredAgentQualite);
+      console.log('Filtered chef de chaine profiles:', filteredChefDeChaine);
+
       setChaines(chainesData || []);
       setProfiles(allProfiles);
-      setAgentQualiteProfiles(allProfiles.filter(p => agentQualiteIds.includes(p.id)));
-      setChefDeChaineProfiles(allProfiles.filter(p => chefDeChaineIds.includes(p.id)));
+      setAgentQualiteProfiles(filteredAgentQualite);
+      setChefDeChaineProfiles(filteredChefDeChaine);
     } catch (error) {
       console.error('Error fetching data:', error);
       toast({
