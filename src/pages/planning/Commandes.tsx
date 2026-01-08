@@ -1,9 +1,14 @@
 import { useState } from "react";
+import { Navigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { useUserRole } from "@/hooks/useUserRole";
+import { DashboardLayout } from "@/components/layouts/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -15,10 +20,23 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import {
   Select,
   SelectContent,
@@ -27,9 +45,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Plus, Pencil, Trash2, Search } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, ClipboardList, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { useUserRole } from "@/hooks/useUserRole";
 import { format } from "date-fns";
 
 type Commande = {
@@ -49,6 +66,8 @@ type Client = {
 };
 
 const Commandes = () => {
+  const { user, loading: authLoading } = useAuth();
+  const { role, hasAccess, loading: roleLoading } = useUserRole();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingCommande, setEditingCommande] = useState<Commande | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -62,7 +81,6 @@ const Commandes = () => {
   });
 
   const queryClient = useQueryClient();
-  const { role, loading: roleLoading } = useUserRole();
   const canManage = role === "admin" || role === "planificatrice";
 
   // Fetch clients for dropdown
@@ -76,6 +94,7 @@ const Commandes = () => {
       if (error) throw error;
       return data as Client[];
     },
+    enabled: !!user,
   });
 
   // Fetch commandes
@@ -89,9 +108,8 @@ const Commandes = () => {
       if (error) throw error;
       return data as Commande[];
     },
+    enabled: !!user,
   });
-
-  // Create mutation
   const createMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
       const { error } = await supabase.from("commandes").insert({
@@ -210,18 +228,32 @@ const Commandes = () => {
       c.clients?.name?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  if (isLoading || roleLoading) {
+  if (authLoading || roleLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
+  if (!user) {
+    return <Navigate to="/auth" replace />;
+  }
+
+  if (!hasAccess(['admin', 'planificatrice'])) {
+    return <Navigate to="/" replace />;
+  }
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Commandes</h1>
+    <DashboardLayout>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight">Commandes</h2>
+            <p className="text-muted-foreground">
+              Gérez les commandes clients
+            </p>
+          </div>
         {canManage && (
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
@@ -335,81 +367,119 @@ const Commandes = () => {
             </DialogContent>
           </Dialog>
         )}
-      </div>
+        </div>
 
-      <div className="flex items-center gap-2">
-        <Search className="h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Rechercher par N° commande ou client..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="max-w-sm"
-        />
-      </div>
-
-      <div className="border rounded-lg">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>N° Commande</TableHead>
-              <TableHead>Client</TableHead>
-              <TableHead>Date Planifiée</TableHead>
-              <TableHead>Date Début</TableHead>
-              <TableHead>Date Fin</TableHead>
-              <TableHead>Instruction</TableHead>
-              {canManage && <TableHead className="w-24">Actions</TableHead>}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredCommandes.length === 0 ? (
-              <TableRow>
-                <TableCell
-                  colSpan={canManage ? 7 : 6}
-                  className="text-center text-muted-foreground py-8"
-                >
-                  Aucune commande trouvée
-                </TableCell>
-              </TableRow>
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <ClipboardList className="h-5 w-5" />
+                  Liste des commandes
+                </CardTitle>
+                <CardDescription>
+                  {filteredCommandes.length} commande{filteredCommandes.length > 1 ? 's' : ''}
+                </CardDescription>
+              </div>
+              <div className="relative w-64">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Rechercher..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
             ) : (
-              filteredCommandes.map((commande) => (
-                <TableRow key={commande.id}>
-                  <TableCell className="font-medium">
-                    {commande.num_commande}
-                  </TableCell>
-                  <TableCell>{commande.clients?.name || "-"}</TableCell>
-                  <TableCell>{formatDate(commande.date_planifiee)}</TableCell>
-                  <TableCell>{formatDate(commande.date_debut)}</TableCell>
-                  <TableCell>{formatDate(commande.date_fin)}</TableCell>
-                  <TableCell className="max-w-xs truncate">
-                    {commande.instruction || "-"}
-                  </TableCell>
-                  {canManage && (
-                    <TableCell>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleEdit(commande)}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => deleteMutation.mutate(commande.id)}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </div>
-                    </TableCell>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>N° Commande</TableHead>
+                    <TableHead>Client</TableHead>
+                    <TableHead>Date Planifiée</TableHead>
+                    <TableHead>Date Début</TableHead>
+                    <TableHead>Date Fin</TableHead>
+                    <TableHead>Instruction</TableHead>
+                    {canManage && <TableHead className="text-right">Actions</TableHead>}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredCommandes.length === 0 ? (
+                    <TableRow>
+                      <TableCell
+                        colSpan={canManage ? 7 : 6}
+                        className="text-center text-muted-foreground py-8"
+                      >
+                        {searchTerm ? 'Aucune commande trouvée' : 'Aucune commande enregistrée'}
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredCommandes.map((commande) => (
+                      <TableRow key={commande.id}>
+                        <TableCell className="font-medium">
+                          {commande.num_commande}
+                        </TableCell>
+                        <TableCell>{commande.clients?.name || "-"}</TableCell>
+                        <TableCell>{formatDate(commande.date_planifiee)}</TableCell>
+                        <TableCell>{formatDate(commande.date_debut)}</TableCell>
+                        <TableCell>{formatDate(commande.date_fin)}</TableCell>
+                        <TableCell className="max-w-xs truncate">
+                          {commande.instruction || "-"}
+                        </TableCell>
+                        {canManage && (
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleEdit(commande)}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button variant="ghost" size="icon">
+                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Supprimer la commande ?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Cette action est irréversible. La commande "{commande.num_commande}" sera définitivement supprimée.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Annuler</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() => deleteMutation.mutate(commande.id)}
+                                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                    >
+                                      Supprimer
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </div>
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    ))
                   )}
-                </TableRow>
-              ))
+                </TableBody>
+              </Table>
             )}
-          </TableBody>
-        </Table>
+          </CardContent>
+        </Card>
       </div>
-    </div>
+    </DashboardLayout>
   );
 };
 
