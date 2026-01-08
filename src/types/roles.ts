@@ -4,6 +4,7 @@ export type AppRole =
   | 'responsable_magasin_pf'
   | 'controle'
   | 'chef_de_chaine'
+  | 'chef_chaine'
   | 'agent_qualite'
   | 'chef_equipe_serigraphie'
   | 'responsable_magasin'
@@ -20,6 +21,7 @@ export const ROLE_LABELS: Record<AppRole, string> = {
   responsable_magasin_pf: 'Responsable Magasin PF',
   controle: 'Contrôle',
   chef_de_chaine: 'Chef de Chaîne',
+  chef_chaine: 'Chef de Chaîne',
   agent_qualite: 'Agent Qualité',
   chef_equipe_serigraphie: 'Chef d\'équipe Sérigraphie',
   responsable_magasin: 'Responsable Magasin',

@@ -86,7 +86,7 @@ export const menuConfig: MenuSection[] = [
     icon: Factory,
     roles: ['admin', 'controle', 'chef_de_chaine', 'agent_qualite', 'planificatrice'],
     items: [
-      { title: 'Ordre de fabrication', url: '/workshop/orders', icon: FileCheck, roles: ['admin', 'controle'] },
+      { title: 'Ordre de fabrication', url: '/atelier/fab-orders', icon: FileCheck, roles: ['admin', 'controle', 'chef_chaine', 'chef_de_chaine'] },
       { title: 'Déclaration fabrication', url: '/workshop/declaration', icon: ClipboardCheck, roles: ['chef_de_chaine', 'admin', 'planificatrice', 'controle'] },
       { title: 'Déclaration défaut', url: '/workshop/defects', icon: AlertCircle, roles: ['chef_de_chaine', 'agent_qualite', 'admin', 'controle'] },
       { title: 'Suivi Journalier', url: '/workshop/daily', icon: Calendar, roles: ['admin', 'controle'] },
