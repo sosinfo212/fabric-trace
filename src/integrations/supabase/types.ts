@@ -300,20 +300,6 @@ export type Database = {
             referencedRelation: "chaines"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "fab_orders_client_id_fkey"
-            columns: ["client_id"]
-            isOneToOne: false
-            referencedRelation: "clients"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fab_orders_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "products"
-            referencedColumns: ["id"]
-          },
         ]
       }
       product_components: {

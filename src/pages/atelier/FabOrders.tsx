@@ -33,7 +33,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import {
   DropdownMenu,
@@ -88,15 +87,13 @@ type FabOrder = {
   statut_of: string;
   comment: string | null;
   order_prod: string | null;
-  products: { id: string; ref_id: string; product_name: string } | null;
-  clients: { id: string; name: string; designation: string | null } | null;
   chaines: { id: string; num_chaine: number } | null;
 };
 
 export default function FabOrdersPage() {
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
-  const { role, loading: roleLoading, hasAccess } = useUserRole();
+  const { loading: roleLoading, hasAccess } = useUserRole();
   const queryClient = useQueryClient();
 
   const [search, setSearch] = useState('');
@@ -137,7 +134,7 @@ export default function FabOrdersPage() {
     enabled: !!user,
   });
 
-  // Fetch fab orders
+  // Fetch fab orders (without product/client relations, only chaine)
   const { data: fabOrders, isLoading, refetch } = useQuery({
     queryKey: ['fab-orders', statusFilter, chaineFilter, clientFilter, search],
     queryFn: async () => {
@@ -145,8 +142,6 @@ export default function FabOrdersPage() {
         .from('fab_orders')
         .select(`
           *,
-          products:product_id (id, ref_id, product_name),
-          clients:client_id (id, name, designation),
           chaines:chaine_id (id, num_chaine)
         `)
         .order('creation_date_of', { ascending: false });
@@ -164,7 +159,7 @@ export default function FabOrdersPage() {
       }
 
       if (search) {
-        query = query.or(`of_id.ilike.%${search}%,sale_order_id.ilike.%${search}%,prod_name.ilike.%${search}%,prod_ref.ilike.%${search}%`);
+        query = query.or(`of_id.ilike.%${search}%,sale_order_id.ilike.%${search}%,prod_name.ilike.%${search}%,prod_ref.ilike.%${search}%,client_id.ilike.%${search}%`);
       }
 
       const { data, error } = await query;
@@ -299,7 +294,7 @@ export default function FabOrdersPage() {
                 <SelectContent>
                   <SelectItem value="all">Tous les clients</SelectItem>
                   {clients?.map((client) => (
-                    <SelectItem key={client.id} value={client.id}>
+                    <SelectItem key={client.id} value={client.name}>
                       {client.designation || client.name}
                     </SelectItem>
                   ))}
@@ -351,11 +346,11 @@ export default function FabOrdersPage() {
                     ) : (
                       fabOrders?.map((order) => (
                         <TableRow key={order.id}>
-                          <TableCell>{order.clients?.designation || order.clients?.name || '-'}</TableCell>
+                          <TableCell>{order.client_id || '-'}</TableCell>
                           <TableCell>{order.sale_order_id}</TableCell>
                           <TableCell className="font-mono">{order.of_id}</TableCell>
-                          <TableCell>{order.products?.product_name || order.prod_name || '-'}</TableCell>
-                          <TableCell>{order.products?.ref_id || order.prod_ref || '-'}</TableCell>
+                          <TableCell>{order.prod_name || '-'}</TableCell>
+                          <TableCell>{order.prod_ref || '-'}</TableCell>
                           <TableCell>
                             {order.chaines?.num_chaine ? `Chaîne ${order.chaines.num_chaine}` : '-'}
                           </TableCell>
@@ -382,7 +377,7 @@ export default function FabOrdersPage() {
                                   <MoreHorizontal className="h-4 w-4" />
                                 </Button>
                               </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
+                              <DropdownMenuContent align="end" className="bg-popover">
                                 <DropdownMenuItem onClick={() => navigate(`/atelier/fab-orders/${order.id}`)}>
                                   <Eye className="h-4 w-4 mr-2" />
                                   Voir
