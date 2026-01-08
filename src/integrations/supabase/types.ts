@@ -14,6 +14,51 @@ export type Database = {
   }
   public: {
     Tables: {
+      chaines: {
+        Row: {
+          chef_de_chaine_id: string | null
+          created_at: string
+          id: string
+          nbr_operateur: number
+          num_chaine: number
+          responsable_qlty_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          chef_de_chaine_id?: string | null
+          created_at?: string
+          id?: string
+          nbr_operateur?: number
+          num_chaine: number
+          responsable_qlty_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          chef_de_chaine_id?: string | null
+          created_at?: string
+          id?: string
+          nbr_operateur?: number
+          num_chaine?: number
+          responsable_qlty_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chaines_chef_de_chaine_id_fkey"
+            columns: ["chef_de_chaine_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chaines_responsable_qlty_id_fkey"
+            columns: ["responsable_qlty_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clients: {
         Row: {
           created_at: string
