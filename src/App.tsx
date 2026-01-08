@@ -9,6 +9,7 @@ import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import UsersPage from "./pages/admin/Users";
 import RolesPage from "./pages/admin/Roles";
+import PermissionsPage from "./pages/admin/Permissions";
 
 const queryClient = new QueryClient();
 
@@ -24,6 +25,8 @@ const App = () => (
             <Route path="/auth" element={<Auth />} />
             <Route path="/admin/users" element={<UsersPage />} />
             <Route path="/admin/roles" element={<RolesPage />} />
+            <Route path="/admin/permissions" element={<PermissionsPage />} />
+            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
