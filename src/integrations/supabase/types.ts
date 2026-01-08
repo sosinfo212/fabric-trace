@@ -216,6 +216,106 @@ export type Database = {
           },
         ]
       }
+      fab_orders: {
+        Row: {
+          chaine_id: string
+          client_id: string
+          comment: string | null
+          comment_chaine: string | null
+          created_at: string
+          creation_date_of: string
+          date_fabrication: string | null
+          end_prod: string | null
+          id: string
+          instruction: string | null
+          lot_set: string
+          of_id: string
+          order_prod: string | null
+          pf_qty: number
+          prod_name: string | null
+          prod_ref: string | null
+          product_id: string | null
+          sale_order_id: string
+          set_qty: number
+          sf_qty: number
+          statut_of: string
+          tester_qty: number
+          updated_at: string
+        }
+        Insert: {
+          chaine_id: string
+          client_id: string
+          comment?: string | null
+          comment_chaine?: string | null
+          created_at?: string
+          creation_date_of?: string
+          date_fabrication?: string | null
+          end_prod?: string | null
+          id?: string
+          instruction?: string | null
+          lot_set?: string
+          of_id: string
+          order_prod?: string | null
+          pf_qty?: number
+          prod_name?: string | null
+          prod_ref?: string | null
+          product_id?: string | null
+          sale_order_id: string
+          set_qty?: number
+          sf_qty?: number
+          statut_of?: string
+          tester_qty?: number
+          updated_at?: string
+        }
+        Update: {
+          chaine_id?: string
+          client_id?: string
+          comment?: string | null
+          comment_chaine?: string | null
+          created_at?: string
+          creation_date_of?: string
+          date_fabrication?: string | null
+          end_prod?: string | null
+          id?: string
+          instruction?: string | null
+          lot_set?: string
+          of_id?: string
+          order_prod?: string | null
+          pf_qty?: number
+          prod_name?: string | null
+          prod_ref?: string | null
+          product_id?: string | null
+          sale_order_id?: string
+          set_qty?: number
+          sf_qty?: number
+          statut_of?: string
+          tester_qty?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fab_orders_chaine_id_fkey"
+            columns: ["chaine_id"]
+            isOneToOne: false
+            referencedRelation: "chaines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fab_orders_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fab_orders_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_components: {
         Row: {
           component_code: string | null
@@ -386,6 +486,7 @@ export type Database = {
         | "agent_magasin"
         | "responsable_transport"
         | "operator"
+        | "chef_chaine"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -528,6 +629,7 @@ export const Constants = {
         "agent_magasin",
         "responsable_transport",
         "operator",
+        "chef_chaine",
       ],
     },
   },

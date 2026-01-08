@@ -16,6 +16,10 @@ import DefectsPage from "./pages/entry/Defects";
 import ChainsPage from "./pages/entry/Chains";
 import ProductsPage from "./pages/entry/Products";
 import CommandesPage from "./pages/planning/Commandes";
+import FabOrdersPage from "./pages/atelier/FabOrders";
+import FabOrderCreatePage from "./pages/atelier/FabOrderCreate";
+import FabOrderEditPage from "./pages/atelier/FabOrderEdit";
+import FabOrderViewPage from "./pages/atelier/FabOrderView";
 
 const queryClient = new QueryClient();
 
@@ -38,6 +42,10 @@ const App = () => (
             <Route path="/entry/chains" element={<ChainsPage />} />
             <Route path="/entry/products" element={<ProductsPage />} />
             <Route path="/planning/orders" element={<CommandesPage />} />
+            <Route path="/atelier/fab-orders" element={<FabOrdersPage />} />
+            <Route path="/atelier/fab-orders/new" element={<FabOrderCreatePage />} />
+            <Route path="/atelier/fab-orders/:id" element={<FabOrderViewPage />} />
+            <Route path="/atelier/fab-orders/:id/edit" element={<FabOrderEditPage />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
