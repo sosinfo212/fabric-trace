@@ -89,6 +89,50 @@ export type Database = {
         }
         Relationships: []
       }
+      commandes: {
+        Row: {
+          client_id: string | null
+          created_at: string
+          date_debut: string | null
+          date_fin: string | null
+          date_planifiee: string | null
+          id: string
+          instruction: string | null
+          num_commande: string
+          updated_at: string
+        }
+        Insert: {
+          client_id?: string | null
+          created_at?: string
+          date_debut?: string | null
+          date_fin?: string | null
+          date_planifiee?: string | null
+          id?: string
+          instruction?: string | null
+          num_commande: string
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string | null
+          created_at?: string
+          date_debut?: string | null
+          date_fin?: string | null
+          date_planifiee?: string | null
+          id?: string
+          instruction?: string | null
+          num_commande?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "commandes_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       custom_roles: {
         Row: {
           created_at: string
