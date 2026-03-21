@@ -1,10 +1,15 @@
 import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
-import { User, Session } from '@supabase/supabase-js';
-import { supabase } from '@/integrations/supabase/client';
+import { authApi, setAuthToken, removeAuthToken } from '@/lib/api';
+
+interface User {
+  id: string;
+  email: string;
+  full_name?: string | null;
+}
 
 interface AuthContextType {
   user: User | null;
-  session: Session | null;
+  session: { token: string } | null;
   loading: boolean;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
@@ -15,57 +20,77 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
+  const [session, setSession] = useState<{ token: string } | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Set up auth state listener FIRST
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
+    // Check for existing session
+    const checkSession = async () => {
+      try {
+        const token = localStorage.getItem('auth_token');
+        if (token) {
+          try {
+            const { user } = await authApi.verify();
+            setUser(user);
+            setSession({ token });
+          } catch (verifyError: any) {
+            // Only remove token if it's an authentication error (401, 403)
+            // Don't log out on network errors (they might be temporary)
+            if (verifyError.message?.includes('401') || 
+                verifyError.message?.includes('403') ||
+                verifyError.message?.includes('Unauthorized') ||
+                verifyError.message?.includes('Token')) {
+              removeAuthToken();
+              setUser(null);
+              setSession(null);
+            } else {
+              // Network error or other issue - keep token but don't set user
+              console.warn('Session verification failed:', verifyError);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Session check error:', error);
+      } finally {
         setLoading(false);
       }
-    );
+    };
 
-    // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
+    checkSession();
   }, []);
 
   const signUp = async (email: string, password: string, fullName: string) => {
-    const redirectUrl = `${window.location.origin}/`;
-    
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: redirectUrl,
-        data: {
-          full_name: fullName,
-        },
-      },
-    });
-    
-    return { error: error as Error | null };
+    try {
+      const { user } = await authApi.signUp(email, password, fullName);
+      setUser(user);
+      const token = localStorage.getItem('auth_token');
+      if (token) {
+        setSession({ token });
+      }
+      return { error: null };
+    } catch (error: any) {
+      return { error: error as Error };
+    }
   };
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    
-    return { error: error as Error | null };
+    try {
+      const { user } = await authApi.signIn(email, password);
+      setUser(user);
+      const token = localStorage.getItem('auth_token');
+      if (token) {
+        setSession({ token });
+      }
+      return { error: null };
+    } catch (error: any) {
+      return { error: error as Error };
+    }
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    await authApi.signOut();
+    setUser(null);
+    setSession(null);
   };
 
   return (

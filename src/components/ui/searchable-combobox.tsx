@@ -55,10 +55,12 @@ export function SearchableCombobox({
           role="combobox"
           aria-expanded={open}
           disabled={disabled}
-          className={cn("w-full justify-between font-normal", className)}
+          className={cn("w-full justify-between font-normal min-w-0 text-left", className)}
         >
-          {selectedOption ? selectedOption.label : placeholder}
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          <span className="min-w-0 flex-1 break-words whitespace-normal text-left">
+            {selectedOption ? selectedOption.label : placeholder}
+          </span>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50 flex-shrink-0" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-full p-0 z-50 bg-popover" align="start">

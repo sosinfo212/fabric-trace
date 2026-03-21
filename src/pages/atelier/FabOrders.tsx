@@ -1,7 +1,7 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, Navigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { fabOrdersApi, chainsApi, clientsApi } from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { DashboardLayout } from '@/components/layouts/DashboardLayout';
@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Table,
   TableBody,
@@ -57,6 +58,38 @@ import { fr } from 'date-fns/locale';
 
 const STATUS_OPTIONS = ['Planifié', 'En cours', 'Réalisé', 'Cloturé', 'Suspendu'] as const;
 
+// Priority Input Component for inline editing
+function PriorityInput({ value, onChange, disabled }: { value: string; onChange: (value: string) => void; disabled: boolean }) {
+  const [localValue, setLocalValue] = useState(value);
+
+  // Update local value when prop changes
+  useEffect(() => {
+    setLocalValue(value);
+  }, [value]);
+
+  const handleBlur = () => {
+    onChange(localValue);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.currentTarget.blur();
+    }
+  };
+
+  return (
+    <Input
+      value={localValue}
+      onChange={(e) => setLocalValue(e.target.value)}
+      onBlur={handleBlur}
+      onKeyDown={handleKeyDown}
+      disabled={disabled}
+      placeholder="Priorité"
+      className="w-[120px]"
+    />
+  );
+}
+
 const STATUS_COLORS: Record<string, string> = {
   'Planifié': 'bg-blue-100 text-blue-800',
   'En cours': 'bg-yellow-100 text-yellow-800',
@@ -87,13 +120,13 @@ type FabOrder = {
   statut_of: string;
   comment: string | null;
   order_prod: string | null;
-  chaines: { id: string; num_chaine: number } | null;
+  chaines: { id: string; num_chaine: number; responsable_qlty_name?: string | null } | null;
 };
 
 export default function FabOrdersPage() {
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
-  const { loading: roleLoading, hasAccess } = useUserRole();
+  const { loading: roleLoading, hasMenuAccess, isAdmin } = useUserRole();
   const queryClient = useQueryClient();
 
   const [search, setSearch] = useState('');
@@ -101,21 +134,25 @@ export default function FabOrdersPage() {
   const [chaineFilter, setChaineFilter] = useState<string>('all');
   const [clientFilter, setClientFilter] = useState<string>('all');
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
+  const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false);
 
-  // Check access
-  const canAccess = hasAccess(['admin', 'chef_chaine', 'chef_de_chaine', 'controle']);
-  const isAdmin = hasAccess(['admin']);
+  const canAccess = hasMenuAccess('/atelier/fab-orders');
 
-  // Fetch chains for filter
+  // Fetch chains for filter (with profile username for display)
   const { data: chaines } = useQuery({
     queryKey: ['chaines'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('chaines')
-        .select('id, num_chaine')
-        .order('num_chaine');
-      if (error) throw error;
-      return data;
+      const data = await chainsApi.getAll();
+      return data.map((c: any) => {
+        const displayName =
+          c.chef_de_chaine?.full_name ||
+          c.chef_de_chaine?.email ||
+          c.responsable_qlty?.full_name ||
+          c.responsable_qlty?.email ||
+          `Chaîne ${c.num_chaine}`;
+        return { id: c.id, num_chaine: c.num_chaine, displayName };
+      });
     },
     enabled: !!user,
   });
@@ -124,46 +161,44 @@ export default function FabOrdersPage() {
   const { data: clients } = useQuery({
     queryKey: ['clients'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('clients')
-        .select('id, name, designation')
-        .order('name');
-      if (error) throw error;
-      return data;
+      const data = await clientsApi.getAll();
+      return data.map((c: any) => ({ id: c.id, name: c.name, designation: c.designation }));
     },
     enabled: !!user,
   });
 
-  // Fetch fab orders (without product/client relations, only chaine)
-  const { data: fabOrders, isLoading, refetch } = useQuery({
+  // Fetch fab orders
+  const { data: fabOrders, isLoading, isRefetching, refetch } = useQuery({
     queryKey: ['fab-orders', statusFilter, chaineFilter, clientFilter, search],
     queryFn: async () => {
-      let query = supabase
-        .from('fab_orders')
-        .select(`
-          *,
-          chaines:chaine_id (id, num_chaine)
-        `)
-        .order('creation_date_of', { ascending: false });
-
+      let data = await fabOrdersApi.getAll();
+      
+      // Apply filters
       if (statusFilter !== 'all') {
-        query = query.eq('statut_of', statusFilter);
+        data = data.filter((order: any) => order.statut_of === statusFilter);
       }
-
       if (chaineFilter !== 'all') {
-        query = query.eq('chaine_id', chaineFilter);
+        data = data.filter((order: any) => order.chaine_id === chaineFilter);
       }
-
       if (clientFilter !== 'all') {
-        query = query.eq('client_id', clientFilter);
+        data = data.filter((order: any) => order.client_id === clientFilter);
       }
-
       if (search) {
-        query = query.or(`of_id.ilike.%${search}%,sale_order_id.ilike.%${search}%,prod_name.ilike.%${search}%,prod_ref.ilike.%${search}%,client_id.ilike.%${search}%`);
+        const searchLower = search.toLowerCase();
+        data = data.filter((order: any) => 
+          order.of_id?.toLowerCase().includes(searchLower) ||
+          order.sale_order_id?.toLowerCase().includes(searchLower) ||
+          order.prod_name?.toLowerCase().includes(searchLower) ||
+          order.prod_ref?.toLowerCase().includes(searchLower) ||
+          order.client_id?.toLowerCase().includes(searchLower)
+        );
       }
-
-      const { data, error } = await query;
-      if (error) throw error;
+      
+      // Sort by creation_date_of descending
+      data.sort((a: any, b: any) => 
+        new Date(b.creation_date_of).getTime() - new Date(a.creation_date_of).getTime()
+      );
+      
       return data as FabOrder[];
     },
     enabled: !!user && canAccess,
@@ -172,11 +207,7 @@ export default function FabOrdersPage() {
   // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('fab_orders')
-        .delete()
-        .eq('id', id);
-      if (error) throw error;
+      await fabOrdersApi.delete(id);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['fab-orders'] });
@@ -191,11 +222,7 @@ export default function FabOrdersPage() {
   // Status update mutation
   const statusMutation = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const { error } = await supabase
-        .from('fab_orders')
-        .update({ statut_of: status })
-        .eq('id', id);
-      if (error) throw error;
+      await fabOrdersApi.update(id, { statut_of: status });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['fab-orders'] });
@@ -205,6 +232,78 @@ export default function FabOrdersPage() {
       toast({ title: 'Erreur', description: error.message, variant: 'destructive' });
     },
   });
+
+  // Chaine update mutation
+  const chaineMutation = useMutation({
+    mutationFn: async ({ id, chaine_id }: { id: string; chaine_id: string }) => {
+      await fabOrdersApi.update(id, { chaine_id });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['fab-orders'] });
+      toast({ title: 'Chaîne mise à jour' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erreur', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  // Priority update mutation
+  const priorityMutation = useMutation({
+    mutationFn: async ({ id, order_prod }: { id: string; order_prod: string | null }) => {
+      await fabOrdersApi.update(id, { order_prod });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['fab-orders'] });
+      toast({ title: 'Priorité mise à jour' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erreur', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  // Bulk delete mutation
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      // Delete all selected orders
+      await Promise.all(ids.map(id => fabOrdersApi.delete(id)));
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['fab-orders'] });
+      setSelectedRows(new Set());
+      setShowBulkDeleteDialog(false);
+      toast({ title: `${selectedRows.size} ordre(s) supprimé(s) avec succès` });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erreur', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  // Handle row selection
+  const toggleRowSelection = (id: string) => {
+    const newSelected = new Set(selectedRows);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedRows(newSelected);
+  };
+
+  // Handle select all
+  const toggleSelectAll = () => {
+    if (selectedRows.size === fabOrders?.length) {
+      setSelectedRows(new Set());
+    } else {
+      setSelectedRows(new Set(fabOrders?.map(order => order.id) || []));
+    }
+  };
+
+  // Handle bulk delete
+  const handleBulkDelete = () => {
+    if (selectedRows.size > 0) {
+      bulkDeleteMutation.mutate(Array.from(selectedRows));
+    }
+  };
 
   if (authLoading || roleLoading) {
     return (
@@ -217,13 +316,11 @@ export default function FabOrdersPage() {
   }
 
   if (!user) {
-    navigate('/auth');
-    return null;
+    return <Navigate to="/auth" replace />;
   }
 
   if (!canAccess) {
-    navigate('/');
-    return null;
+    return <Navigate to="/" replace />;
   }
 
   return (
@@ -232,6 +329,16 @@ export default function FabOrdersPage() {
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold">Ordres de Fabrication</h1>
           <div className="flex gap-2">
+            {isAdmin && selectedRows.size > 0 && (
+              <Button 
+                variant="destructive" 
+                onClick={() => setShowBulkDeleteDialog(true)}
+                disabled={bulkDeleteMutation.isPending}
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Supprimer ({selectedRows.size})
+              </Button>
+            )}
             <Button variant="outline" onClick={() => toast({ title: 'Import Excel', description: 'Fonctionnalité en cours de développement' })}>
               <Upload className="h-4 w-4 mr-2" />
               Importer Excel
@@ -275,13 +382,13 @@ export default function FabOrdersPage() {
 
               <Select value={chaineFilter} onValueChange={setChaineFilter}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Chaîne" />
+                  <SelectValue placeholder="Chaîne / Responsable" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Toutes les chaînes</SelectItem>
                   {chaines?.map((chaine) => (
                     <SelectItem key={chaine.id} value={chaine.id}>
-                      Chaîne {chaine.num_chaine}
+                      {chaine.displayName}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -307,8 +414,14 @@ export default function FabOrdersPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Liste des Ordres ({fabOrders?.length || 0})</CardTitle>
-            <Button variant="ghost" size="sm" onClick={() => refetch()}>
-              <RefreshCw className="h-4 w-4" />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => refetch()}
+              disabled={isRefetching}
+              aria-label="Actualiser la liste"
+            >
+              <RefreshCw className={`h-4 w-4 ${isRefetching ? 'animate-spin' : ''}`} />
             </Button>
           </CardHeader>
           <CardContent>
@@ -321,12 +434,23 @@ export default function FabOrdersPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      {isAdmin && (
+                        <TableHead className="w-12">
+                          <Checkbox
+                            checked={fabOrders && fabOrders.length > 0 && selectedRows.size === fabOrders.length}
+                            onCheckedChange={toggleSelectAll}
+                            aria-label="Sélectionner tout"
+                          />
+                        </TableHead>
+                      )}
                       <TableHead>Client</TableHead>
                       <TableHead>N° Commande</TableHead>
                       <TableHead>OF ID</TableHead>
                       <TableHead>Produit</TableHead>
                       <TableHead>Référence</TableHead>
                       <TableHead>Chaîne</TableHead>
+                      <TableHead>Chef qualité</TableHead>
+                      <TableHead>Priorité</TableHead>
                       <TableHead>Date Fab.</TableHead>
                       <TableHead className="text-right">PF Qty</TableHead>
                       <TableHead className="text-right">Tester</TableHead>
@@ -339,20 +463,69 @@ export default function FabOrdersPage() {
                   <TableBody>
                     {fabOrders?.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={13} className="text-center text-muted-foreground">
+                        <TableCell colSpan={isAdmin ? 16 : 15} className="text-center text-muted-foreground">
                           Aucun ordre de fabrication trouvé
                         </TableCell>
                       </TableRow>
                     ) : (
                       fabOrders?.map((order) => (
                         <TableRow key={order.id}>
+                          {isAdmin && (
+                            <TableCell>
+                              <Checkbox
+                                checked={selectedRows.has(order.id)}
+                                onCheckedChange={() => toggleRowSelection(order.id)}
+                                aria-label={`Sélectionner ${order.of_id}`}
+                              />
+                            </TableCell>
+                          )}
                           <TableCell>{order.client_id || '-'}</TableCell>
                           <TableCell>{order.sale_order_id}</TableCell>
                           <TableCell className="font-mono">{order.of_id}</TableCell>
                           <TableCell>{order.prod_name || '-'}</TableCell>
                           <TableCell>{order.prod_ref || '-'}</TableCell>
                           <TableCell>
-                            {order.chaines?.num_chaine ? `Chaîne ${order.chaines.num_chaine}` : '-'}
+                            {canAccess ? (
+                              <Select
+                                value={order.chaine_id}
+                                onValueChange={(value) => chaineMutation.mutate({ id: order.id, chaine_id: value })}
+                                disabled={chaineMutation.isPending}
+                              >
+                                <SelectTrigger className="w-[140px]">
+                                  <SelectValue>
+                                    {order.chaines?.num_chaine ? `Chaîne ${order.chaines.num_chaine}` : 'Sélectionner'}
+                                  </SelectValue>
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {chaines?.map((chaine) => (
+                                    <SelectItem key={chaine.id} value={chaine.id}>
+                                      Chaîne {chaine.num_chaine}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              order.chaines?.num_chaine ? `Chaîne ${order.chaines.num_chaine}` : '-'
+                            )}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {order.chaines?.responsable_qlty_name || '-'}
+                          </TableCell>
+                          <TableCell>
+                            {canAccess ? (
+                              <PriorityInput
+                                value={order.order_prod || ''}
+                                onChange={(value) => {
+                                  const trimmedValue = value.trim() || null;
+                                  if (trimmedValue !== (order.order_prod || null)) {
+                                    priorityMutation.mutate({ id: order.id, order_prod: trimmedValue });
+                                  }
+                                }}
+                                disabled={priorityMutation.isPending}
+                              />
+                            ) : (
+                              <span>{order.order_prod || '-'}</span>
+                            )}
                           </TableCell>
                           <TableCell>
                             {order.date_fabrication
@@ -436,6 +609,34 @@ export default function FabOrdersPage() {
               className="bg-destructive text-destructive-foreground"
             >
               Supprimer
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={showBulkDeleteDialog} onOpenChange={setShowBulkDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmer la suppression multiple</AlertDialogTitle>
+            <AlertDialogDescription>
+              Êtes-vous sûr de vouloir supprimer {selectedRows.size} ordre(s) de fabrication ? Cette action est irréversible.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkDeleteMutation.isPending}>Annuler</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleBulkDelete}
+              className="bg-destructive text-destructive-foreground"
+              disabled={bulkDeleteMutation.isPending}
+            >
+              {bulkDeleteMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Suppression...
+                </>
+              ) : (
+                `Supprimer ${selectedRows.size} ordre(s)`
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

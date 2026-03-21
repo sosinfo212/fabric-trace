@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { Navigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { usersApi } from '@/lib/api';
 import { DashboardLayout } from '@/components/layouts/DashboardLayout';
 import { AppRole, ROLE_LABELS } from '@/types/roles';
 import { Button } from '@/components/ui/button';
@@ -64,6 +64,15 @@ const inviteSchema = z.object({
   role: z.string(),
 });
 
+const editUserSchema = z.object({
+  email: z.string().trim().email({ message: "Email invalide" }).max(255),
+  full_name: z.string().trim().max(100).optional(),
+  password: z.string().max(72).optional(),
+}).refine(
+  (data) => !data.password || data.password.length === 0 || data.password.length >= 6,
+  { message: "Le mot de passe doit contenir au moins 6 caractères", path: ["password"] }
+);
+
 const ALL_ROLES: AppRole[] = [
   'admin',
   'planificatrice',
@@ -83,7 +92,8 @@ const ALL_ROLES: AppRole[] = [
 
 export default function UsersPage() {
   const { user, loading: authLoading } = useAuth();
-  const { role, hasAccess, loading: roleLoading } = useUserRole();
+  const { role, hasMenuAccess, allowedMenuPaths, loading: roleLoading } = useUserRole();
+  const canAccessUsersPage = role === 'admin' || (Array.isArray(allowedMenuPaths) && allowedMenuPaths.includes('/admin/users'));
   const { toast } = useToast();
 
   const [users, setUsers] = useState<UserWithRole[]>([]);
@@ -100,33 +110,16 @@ export default function UsersPage() {
   const [inviteRole, setInviteRole] = useState<AppRole>('operator');
 
   // Edit form state
+  const [editEmail, setEditEmail] = useState('');
+  const [editFullName, setEditFullName] = useState('');
+  const [editPassword, setEditPassword] = useState('');
   const [editRole, setEditRole] = useState<AppRole>('operator');
 
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      const { data: profiles, error: profilesError } = await supabase
-        .from('profiles')
-        .select('id, email, full_name, created_at')
-        .order('created_at', { ascending: false });
-
-      if (profilesError) throw profilesError;
-
-      const { data: roles, error: rolesError } = await supabase
-        .from('user_roles')
-        .select('user_id, role');
-
-      if (rolesError) throw rolesError;
-
-      const usersWithRoles: UserWithRole[] = (profiles || []).map((profile) => {
-        const userRole = roles?.find((r) => r.user_id === profile.id);
-        return {
-          ...profile,
-          role: userRole?.role as AppRole | null,
-        };
-      });
-
-      setUsers(usersWithRoles);
+      const usersWithRoles = await usersApi.getAll();
+      setUsers(usersWithRoles as UserWithRole[]);
     } catch (error) {
       console.error('Error fetching users:', error);
       toast({
@@ -140,10 +133,10 @@ export default function UsersPage() {
   };
 
   useEffect(() => {
-    if (user && role === 'admin') {
+    if (user && canAccessUsersPage) {
       fetchUsers();
     }
-  }, [user, role]);
+  }, [user, canAccessUsersPage]);
 
   const handleInviteUser = async () => {
     try {
@@ -165,35 +158,12 @@ export default function UsersPage() {
 
       setSubmitting(true);
 
-      // Get current session token
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session) {
-        toast({
-          title: 'Erreur',
-          description: 'Session expirée. Veuillez vous reconnecter.',
-          variant: 'destructive',
-        });
-        return;
-      }
-
-      // Call edge function to create user without affecting current session
-      const response = await supabase.functions.invoke('create-user', {
-        body: {
-          email: inviteEmail,
-          password: invitePassword,
-          full_name: inviteFullName,
-          role: inviteRole,
-        },
+      await usersApi.create({
+        email: inviteEmail,
+        password: invitePassword,
+        full_name: inviteFullName,
+        role: inviteRole,
       });
-
-      if (response.error) {
-        throw new Error(response.error.message);
-      }
-
-      if (response.data?.error) {
-        throw new Error(response.data.error);
-      }
 
       toast({
         title: 'Succès',
@@ -218,32 +188,51 @@ export default function UsersPage() {
     }
   };
 
-  const handleEditRole = async () => {
+  const handleEditUser = async () => {
     if (!selectedUser) return;
+
+    const validation = editUserSchema.safeParse({
+      email: editEmail,
+      full_name: editFullName,
+      password: editPassword,
+    });
+    if (!validation.success) {
+      toast({
+        title: 'Erreur de validation',
+        description: validation.error.errors[0].message,
+        variant: 'destructive',
+      });
+      return;
+    }
 
     try {
       setSubmitting(true);
 
-      const { error } = await supabase
-        .from('user_roles')
-        .update({ role: editRole })
-        .eq('user_id', selectedUser.id);
+      const payload: { email: string; full_name?: string; password?: string; role: AppRole } = {
+        email: editEmail.trim(),
+        full_name: editFullName.trim() || undefined,
+        role: editRole,
+      };
+      if (editPassword.trim()) {
+        payload.password = editPassword;
+      }
 
-      if (error) throw error;
+      await usersApi.update(selectedUser.id, payload);
 
       toast({
         title: 'Succès',
-        description: 'Rôle mis à jour avec succès',
+        description: 'Utilisateur mis à jour avec succès',
       });
 
       setIsEditOpen(false);
       setSelectedUser(null);
+      setEditPassword('');
       fetchUsers();
     } catch (error: any) {
-      console.error('Error updating role:', error);
+      console.error('Error updating user:', error);
       toast({
         title: 'Erreur',
-        description: error.message || 'Impossible de mettre à jour le rôle',
+        description: error.message || 'Impossible de mettre à jour l\'utilisateur',
         variant: 'destructive',
       });
     } finally {
@@ -253,21 +242,7 @@ export default function UsersPage() {
 
   const handleDeleteUser = async (userId: string) => {
     try {
-      // Note: Deleting from auth.users requires admin privileges
-      // For now, we'll just remove the role and profile
-      const { error: roleError } = await supabase
-        .from('user_roles')
-        .delete()
-        .eq('user_id', userId);
-
-      if (roleError) throw roleError;
-
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .delete()
-        .eq('id', userId);
-
-      if (profileError) throw profileError;
+      await usersApi.delete(userId);
 
       toast({
         title: 'Succès',
@@ -285,8 +260,13 @@ export default function UsersPage() {
     }
   };
 
+  const handleEditRole = handleEditUser;
+
   const openEditDialog = (userToEdit: UserWithRole) => {
     setSelectedUser(userToEdit);
+    setEditEmail(userToEdit.email ?? '');
+    setEditFullName(userToEdit.full_name ?? '');
+    setEditPassword('');
     setEditRole(userToEdit.role || 'operator');
     setIsEditOpen(true);
   };
@@ -303,7 +283,7 @@ export default function UsersPage() {
     return <Navigate to="/auth" replace />;
   }
 
-  if (!hasAccess(['admin'])) {
+  if (!hasMenuAccess('/admin/users')) {
     return <Navigate to="/" replace />;
   }
 
@@ -483,16 +463,45 @@ export default function UsersPage() {
           </CardContent>
         </Card>
 
-        {/* Edit Role Dialog */}
+        {/* Edit User Dialog */}
         <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Modifier le rôle</DialogTitle>
+              <DialogTitle>Modifier l'utilisateur</DialogTitle>
               <DialogDescription>
-                Modifier le rôle de {selectedUser?.email}
+                Modifier les informations de {selectedUser?.email}
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="editEmail">Email</Label>
+                <Input
+                  id="editEmail"
+                  type="email"
+                  placeholder="email@exemple.com"
+                  value={editEmail}
+                  onChange={(e) => setEditEmail(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="editFullName">Nom complet</Label>
+                <Input
+                  id="editFullName"
+                  placeholder="Jean Dupont"
+                  value={editFullName}
+                  onChange={(e) => setEditFullName(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="editPassword">Nouveau mot de passe</Label>
+                <Input
+                  id="editPassword"
+                  type="password"
+                  placeholder="Laisser vide pour ne pas modifier"
+                  value={editPassword}
+                  onChange={(e) => setEditPassword(e.target.value)}
+                />
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="editRole">Rôle</Label>
                 <Select value={editRole} onValueChange={(value) => setEditRole(value as AppRole)}>
@@ -513,7 +522,7 @@ export default function UsersPage() {
               <Button variant="outline" onClick={() => setIsEditOpen(false)}>
                 Annuler
               </Button>
-              <Button onClick={handleEditRole} disabled={submitting}>
+              <Button onClick={handleEditUser} disabled={submitting}>
                 {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Enregistrer
               </Button>

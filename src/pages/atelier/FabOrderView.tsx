@@ -1,6 +1,6 @@
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { fabOrdersApi, fabricationApi } from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { DashboardLayout } from '@/components/layouts/DashboardLayout';
@@ -8,6 +8,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { toast } from '@/hooks/use-toast';
 import { Loader2, ArrowLeft, Pencil, CheckCircle } from 'lucide-react';
 import { format } from 'date-fns';
@@ -26,36 +34,30 @@ export default function FabOrderViewPage() {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
   const { user, loading: authLoading } = useAuth();
-  const { loading: roleLoading, hasAccess } = useUserRole();
+  const { loading: roleLoading, hasMenuAccess } = useUserRole();
 
-  const canAccess = hasAccess(['admin', 'chef_chaine', 'chef_de_chaine', 'controle']);
+  const canAccess = hasMenuAccess('/atelier/fab-orders');
 
   // Fetch order with chaine relation only
   const { data: order, isLoading } = useQuery({
     queryKey: ['fab-order', id],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('fab_orders')
-        .select(`
-          *,
-          chaines:chaine_id (id, num_chaine)
-        `)
-        .eq('id', id)
-        .single();
-      if (error) throw error;
-      return data;
+      return await fabOrdersApi.getById(id!);
     },
     enabled: !!user && !!id,
+  });
+
+  // Fetch fabrication declarations for this OF
+  const { data: fabrications = [], isLoading: fabricationsLoading } = useQuery({
+    queryKey: ['fabrication-history', order?.of_id],
+    queryFn: () => fabricationApi.getByOFID(order!.of_id),
+    enabled: !!user && !!order?.of_id,
   });
 
   // Status update mutation
   const statusMutation = useMutation({
     mutationFn: async (status: string) => {
-      const { error } = await supabase
-        .from('fab_orders')
-        .update({ statut_of: status })
-        .eq('id', id);
-      if (error) throw error;
+      await fabOrdersApi.update(id!, { statut_of: status });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['fab-order', id] });
@@ -292,9 +294,51 @@ export default function FabOrderViewPage() {
               <CardTitle>Fabrications</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-muted-foreground text-center py-8">
-                Aucune fabrication enregistrée
-              </p>
+              {fabricationsLoading ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : fabrications.length === 0 ? (
+                <p className="text-muted-foreground text-center py-8">
+                  Aucune déclaration enregistrée
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Date déclaration</TableHead>
+                        <TableHead className="text-right">PF</TableHead>
+                        <TableHead className="text-right">Set</TableHead>
+                        <TableHead className="text-right">Tester</TableHead>
+                        <TableHead className="text-right">Total</TableHead>
+                        <TableHead>Créé par</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {fabrications.map((row: { id: number; created_at?: string; Pf_Qty?: number; Set_qty?: number; Tester_qty?: number; created_by?: string; created_by_name?: string }) => {
+                        const total = (row.Pf_Qty ?? 0) + (row.Set_qty ?? 0) + (row.Tester_qty ?? 0);
+                        return (
+                          <TableRow key={row.id}>
+                            <TableCell className="whitespace-nowrap">
+                              {row.created_at
+                                ? format(new Date(row.created_at), 'd MMM yyyy', { locale: fr })
+                                : '-'}
+                            </TableCell>
+                            <TableCell className="text-right">{row.Pf_Qty ?? 0}</TableCell>
+                            <TableCell className="text-right">{row.Set_qty ?? 0}</TableCell>
+                            <TableCell className="text-right">{row.Tester_qty ?? 0}</TableCell>
+                            <TableCell className="text-right font-medium">{total}</TableCell>
+                            <TableCell className="text-muted-foreground text-sm">
+                              {row.created_by_name || row.created_by || '-'}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
             </CardContent>
           </Card>
 

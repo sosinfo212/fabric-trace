@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { Navigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { rolesApi, permissionsApi } from '@/lib/api';
 import { DashboardLayout } from '@/components/layouts/DashboardLayout';
 import { AppRole } from '@/types/roles';
 import { menuConfig } from '@/config/menuConfig';
@@ -57,7 +57,8 @@ const getAllMenuPaths = () => {
 
 export default function PermissionsPage() {
   const { user, loading: authLoading } = useAuth();
-  const { role, hasAccess, loading: roleLoading } = useUserRole();
+  const { role, hasMenuAccess, allowedMenuPaths, loading: roleLoading } = useUserRole();
+  const canAccessPage = role === 'admin' || (Array.isArray(allowedMenuPaths) && allowedMenuPaths.includes('/admin/permissions'));
   const { toast } = useToast();
 
   const [roles, setRoles] = useState<CustomRole[]>([]);
@@ -74,21 +75,16 @@ export default function PermissionsPage() {
     setLoading(true);
     try {
       // Fetch roles
-      const { data: rolesData, error: rolesError } = await supabase
-        .from('custom_roles')
-        .select('id, name, label')
-        .order('label');
-
-      if (rolesError) throw rolesError;
-      setRoles(rolesData || []);
+      const rolesData = await rolesApi.getAll();
+      setRoles(rolesData.map((r: any) => ({ id: r.id, name: r.name, label: r.label })));
 
       // Fetch permissions
-      const { data: permissionsData, error: permissionsError } = await supabase
-        .from('role_permissions')
-        .select('role, menu_path, can_access');
-
-      if (permissionsError) throw permissionsError;
-      setPermissions(permissionsData || []);
+      const permissionsData = await permissionsApi.getAll();
+      setPermissions(permissionsData.map((p: any) => ({
+        role: p.role,
+        menu_path: p.menu_path,
+        can_access: p.can_access === 1 || p.can_access === true
+      })));
 
       // Set first role as selected if none selected
       if (!selectedRole && rolesData && rolesData.length > 0) {
@@ -107,10 +103,10 @@ export default function PermissionsPage() {
   };
 
   useEffect(() => {
-    if (user && role === 'admin') {
+    if (user && canAccessPage) {
       fetchData();
     }
-  }, [user, role]);
+  }, [user, canAccessPage]);
 
   // Update local permissions when role changes
   useEffect(() => {
@@ -154,26 +150,14 @@ export default function PermissionsPage() {
     try {
       setSaving(true);
 
-      // Delete existing permissions for this role
-      await supabase
-        .from('role_permissions')
-        .delete()
-        .eq('role', selectedRole as AppRole);
-
-      // Insert new permissions
+      // Prepare permissions array
       const permissionsToInsert = Object.entries(localPermissions).map(([path, canAccess]) => ({
-        role: selectedRole as AppRole,
         menu_path: path,
         can_access: canAccess,
       }));
 
-      if (permissionsToInsert.length > 0) {
-        const { error } = await supabase
-          .from('role_permissions')
-          .insert(permissionsToInsert);
-
-        if (error) throw error;
-      }
+      // Bulk update permissions
+      await permissionsApi.updateBulk(selectedRole, permissionsToInsert);
 
       toast({
         title: 'Succès',
@@ -237,7 +221,7 @@ export default function PermissionsPage() {
     return <Navigate to="/auth" replace />;
   }
 
-  if (!hasAccess(['admin'])) {
+  if (!hasMenuAccess('/admin/permissions')) {
     return <Navigate to="/" replace />;
   }
 

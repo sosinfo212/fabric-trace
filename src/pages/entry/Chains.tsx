@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { Navigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { chainsApi, profilesApi, userRolesApi } from '@/lib/api';
 import { DashboardLayout } from '@/components/layouts/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -65,7 +65,8 @@ interface Chaine {
 
 export default function ChainsPage() {
   const { user, loading: authLoading } = useAuth();
-  const { hasAccess, loading: roleLoading } = useUserRole();
+  const { role, hasMenuAccess, allowedMenuPaths, loading: roleLoading } = useUserRole();
+  const canAccessPage = role === 'admin' || (Array.isArray(allowedMenuPaths) && allowedMenuPaths.includes('/entry/chains'));
   const { toast } = useToast();
 
   const [chaines, setChaines] = useState<Chaine[]>([]);
@@ -88,52 +89,22 @@ export default function ChainsPage() {
     setLoading(true);
     try {
       // Fetch chaines with related profiles
-      const { data: chainesData, error: chainesError } = await supabase
-        .from('chaines')
-        .select(`
-          *,
-          responsable_qlty:profiles!chaines_responsable_qlty_id_fkey(id, email, full_name),
-          chef_de_chaine:profiles!chaines_chef_de_chaine_id_fkey(id, email, full_name)
-        `)
-        .order('num_chaine');
-
-      if (chainesError) throw chainesError;
+      const chainesData = await chainsApi.getAll();
 
       // Fetch all profiles for dropdowns
-      const { data: profilesData, error: profilesError } = await supabase
-        .from('profiles')
-        .select('id, email, full_name')
-        .order('full_name');
-
-      if (profilesError) throw profilesError;
+      const allProfiles = await profilesApi.getAll();
 
       // Fetch user roles to filter profiles by role
-      const { data: userRolesData, error: rolesError } = await supabase
-        .from('user_roles')
-        .select('user_id, role');
-
-      if (rolesError) throw rolesError;
-
-      const allProfiles = profilesData || [];
-      const userRoles = userRolesData || [];
-
-      console.log('All profiles:', allProfiles);
-      console.log('User roles:', userRoles);
+      const userRoles = await userRolesApi.getAll();
 
       // Filter profiles by role
-      const agentQualiteIds = userRoles.filter(r => r.role === 'agent_qualite').map(r => r.user_id);
-      const chefDeChaineIds = userRoles.filter(r => r.role === 'chef_de_chaine').map(r => r.user_id);
+      const agentQualiteIds = userRoles.filter((r: any) => r.role === 'agent_qualite').map((r: any) => r.user_id);
+      const chefDeChaineIds = userRoles.filter((r: any) => r.role === 'chef_de_chaine').map((r: any) => r.user_id);
 
-      console.log('Agent qualite IDs:', agentQualiteIds);
-      console.log('Chef de chaine IDs:', chefDeChaineIds);
+      const filteredAgentQualite = allProfiles.filter((p: any) => agentQualiteIds.includes(p.id));
+      const filteredChefDeChaine = allProfiles.filter((p: any) => chefDeChaineIds.includes(p.id));
 
-      const filteredAgentQualite = allProfiles.filter(p => agentQualiteIds.includes(p.id));
-      const filteredChefDeChaine = allProfiles.filter(p => chefDeChaineIds.includes(p.id));
-
-      console.log('Filtered agent qualite profiles:', filteredAgentQualite);
-      console.log('Filtered chef de chaine profiles:', filteredChefDeChaine);
-
-      setChaines(chainesData || []);
+      setChaines(chainesData);
       setProfiles(allProfiles);
       setAgentQualiteProfiles(filteredAgentQualite);
       setChefDeChaineProfiles(filteredChefDeChaine);
@@ -150,10 +121,10 @@ export default function ChainsPage() {
   };
 
   useEffect(() => {
-    if (user && hasAccess(['admin'])) {
+    if (user && !roleLoading && canAccessPage) {
       fetchData();
     }
-  }, [user]);
+  }, [user, roleLoading, canAccessPage]);
 
   const resetForm = () => {
     setFormNumChaine('');
@@ -175,14 +146,12 @@ export default function ChainsPage() {
     try {
       setSubmitting(true);
 
-      const { error } = await supabase.from('chaines').insert({
+      await chainsApi.create({
         num_chaine: parseInt(formNumChaine),
-        responsable_qlty_id: formResponsableQlty && formResponsableQlty !== '__none__' ? formResponsableQlty : null,
-        chef_de_chaine_id: formChefDeChaine && formChefDeChaine !== '__none__' ? formChefDeChaine : null,
+        responsable_qlty_id: formResponsableQlty && formResponsableQlty !== '__none__' ? formResponsableQlty : undefined,
+        chef_de_chaine_id: formChefDeChaine && formChefDeChaine !== '__none__' ? formChefDeChaine : undefined,
         nbr_operateur: parseInt(formNbrOperateur),
       });
-
-      if (error) throw error;
 
       toast({ title: 'Succès', description: 'Chaîne créée avec succès' });
       setIsCreateOpen(false);
@@ -206,17 +175,12 @@ export default function ChainsPage() {
     try {
       setSubmitting(true);
 
-      const { error } = await supabase
-        .from('chaines')
-        .update({
-          num_chaine: parseInt(formNumChaine),
-          responsable_qlty_id: formResponsableQlty && formResponsableQlty !== '__none__' ? formResponsableQlty : null,
-          chef_de_chaine_id: formChefDeChaine && formChefDeChaine !== '__none__' ? formChefDeChaine : null,
-          nbr_operateur: parseInt(formNbrOperateur),
-        })
-        .eq('id', selectedChaine.id);
-
-      if (error) throw error;
+      await chainsApi.update(selectedChaine.id, {
+        num_chaine: parseInt(formNumChaine),
+        responsable_qlty_id: formResponsableQlty && formResponsableQlty !== '__none__' ? formResponsableQlty : undefined,
+        chef_de_chaine_id: formChefDeChaine && formChefDeChaine !== '__none__' ? formChefDeChaine : undefined,
+        nbr_operateur: parseInt(formNbrOperateur),
+      });
 
       toast({ title: 'Succès', description: 'Chaîne mise à jour avec succès' });
       setIsEditOpen(false);
@@ -237,12 +201,7 @@ export default function ChainsPage() {
 
   const handleDelete = async (chaine: Chaine) => {
     try {
-      const { error } = await supabase
-        .from('chaines')
-        .delete()
-        .eq('id', chaine.id);
-
-      if (error) throw error;
+      await chainsApi.delete(chaine.id);
 
       toast({ title: 'Succès', description: 'Chaîne supprimée avec succès' });
       fetchData();
@@ -282,7 +241,7 @@ export default function ChainsPage() {
     return <Navigate to="/auth" replace />;
   }
 
-  if (!hasAccess(['admin'])) {
+  if (!hasMenuAccess('/entry/chains')) {
     return <Navigate to="/" replace />;
   }
 

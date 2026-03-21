@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { Navigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { backupsApi } from '@/lib/api';
 import { DashboardLayout } from '@/components/layouts/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -35,7 +35,7 @@ const AVAILABLE_TABLES = [
 
 export default function BackupsPage() {
   const { user, loading: authLoading } = useAuth();
-  const { role, hasAccess, loading: roleLoading } = useUserRole();
+  const { role, hasMenuAccess, loading: roleLoading } = useUserRole();
   const { toast } = useToast();
 
   const [selectedTables, setSelectedTables] = useState<string[]>(
@@ -73,19 +73,7 @@ export default function BackupsPage() {
     try {
       setExporting(true);
 
-      const response = await supabase.functions.invoke('export-database', {
-        body: { tables: selectedTables },
-      });
-
-      if (response.error) {
-        throw new Error(response.error.message);
-      }
-
-      if (response.data?.error) {
-        throw new Error(response.data.error);
-      }
-
-      const sql = response.data.sql;
+      const sql = await backupsApi.export(selectedTables);
 
       // Create and download file
       const blob = new Blob([sql], { type: 'text/sql' });
@@ -135,7 +123,7 @@ export default function BackupsPage() {
     return <Navigate to="/auth" replace />;
   }
 
-  if (!hasAccess(['admin'])) {
+  if (!hasMenuAccess('/admin/backups')) {
     return <Navigate to="/" replace />;
   }
 

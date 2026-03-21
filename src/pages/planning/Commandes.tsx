@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Navigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { commandesApi, clientsApi } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { DashboardLayout } from "@/components/layouts/DashboardLayout";
@@ -37,13 +37,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { SearchableCombobox, ComboboxOption } from "@/components/ui/searchable-combobox";
 import { Label } from "@/components/ui/label";
 import { Plus, Pencil, Trash2, Search, ClipboardList, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -57,7 +51,7 @@ type Commande = {
   date_debut: string | null;
   date_fin: string | null;
   instruction: string | null;
-  clients?: { id: string; name: string } | null;
+  client_name?: string | null;
 };
 
 type Client = {
@@ -67,7 +61,7 @@ type Client = {
 
 const Commandes = () => {
   const { user, loading: authLoading } = useAuth();
-  const { role, hasAccess, loading: roleLoading } = useUserRole();
+  const { role, hasMenuAccess, isAdmin, loading: roleLoading } = useUserRole();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingCommande, setEditingCommande] = useState<Commande | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -81,18 +75,14 @@ const Commandes = () => {
   });
 
   const queryClient = useQueryClient();
-  const canManage = role === "admin" || role === "planificatrice";
+  const canManage = isAdmin || hasMenuAccess('/planning/orders');
 
   // Fetch clients for dropdown
   const { data: clients = [] } = useQuery({
     queryKey: ["clients"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("clients")
-        .select("id, name")
-        .order("name");
-      if (error) throw error;
-      return data as Client[];
+      const data = await clientsApi.getAll();
+      return data.map((c: any) => ({ id: c.id, name: c.name })) as Client[];
     },
     enabled: !!user,
   });
@@ -101,26 +91,21 @@ const Commandes = () => {
   const { data: commandes = [], isLoading } = useQuery({
     queryKey: ["commandes"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("commandes")
-        .select("*, clients(id, name)")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
+      const data = await commandesApi.getAll();
       return data as Commande[];
     },
     enabled: !!user,
   });
   const createMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
-      const { error } = await supabase.from("commandes").insert({
+      await commandesApi.create({
         num_commande: data.num_commande,
-        client_id: data.client_id || null,
-        date_planifiee: data.date_planifiee || null,
-        date_debut: data.date_debut || null,
-        date_fin: data.date_fin || null,
-        instruction: data.instruction || null,
+        client_id: data.client_id || undefined,
+        date_planifiee: data.date_planifiee || undefined,
+        date_debut: data.date_debut || undefined,
+        date_fin: data.date_fin || undefined,
+        instruction: data.instruction || undefined,
       });
-      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["commandes"] });
@@ -135,18 +120,14 @@ const Commandes = () => {
   // Update mutation
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: typeof formData }) => {
-      const { error } = await supabase
-        .from("commandes")
-        .update({
-          num_commande: data.num_commande,
-          client_id: data.client_id || null,
-          date_planifiee: data.date_planifiee || null,
-          date_debut: data.date_debut || null,
-          date_fin: data.date_fin || null,
-          instruction: data.instruction || null,
-        })
-        .eq("id", id);
-      if (error) throw error;
+      await commandesApi.update(id, {
+        num_commande: data.num_commande,
+        client_id: data.client_id || undefined,
+        date_planifiee: data.date_planifiee || undefined,
+        date_debut: data.date_debut || undefined,
+        date_fin: data.date_fin || undefined,
+        instruction: data.instruction || undefined,
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["commandes"] });
@@ -161,8 +142,7 @@ const Commandes = () => {
   // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("commandes").delete().eq("id", id);
-      if (error) throw error;
+      await commandesApi.delete(id);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["commandes"] });
@@ -225,7 +205,7 @@ const Commandes = () => {
   const filteredCommandes = commandes.filter(
     (c) =>
       c.num_commande.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.clients?.name?.toLowerCase().includes(searchTerm.toLowerCase())
+      c.client_name?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   if (authLoading || roleLoading) {
@@ -240,7 +220,7 @@ const Commandes = () => {
     return <Navigate to="/auth" replace />;
   }
 
-  if (!hasAccess(['admin', 'planificatrice'])) {
+  if (!hasMenuAccess('/planning/orders')) {
     return <Navigate to="/" replace />;
   }
 
@@ -284,23 +264,19 @@ const Commandes = () => {
 
                 <div className="space-y-2">
                   <Label htmlFor="client">Client</Label>
-                  <Select
+                  <SearchableCombobox
+                    options={clients.map((client) => ({
+                      value: client.id,
+                      label: client.name,
+                    })) as ComboboxOption[]}
                     value={formData.client_id}
                     onValueChange={(value) =>
                       setFormData({ ...formData, client_id: value })
                     }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Sélectionner un client" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {clients.map((client) => (
-                        <SelectItem key={client.id} value={client.id}>
-                          {client.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    placeholder="Sélectionner un client"
+                    searchPlaceholder="Rechercher un client..."
+                    emptyText="Aucun client trouvé"
+                  />
                 </div>
 
                 <div className="grid grid-cols-3 gap-4">
@@ -426,7 +402,7 @@ const Commandes = () => {
                         <TableCell className="font-medium">
                           {commande.num_commande}
                         </TableCell>
-                        <TableCell>{commande.clients?.name || "-"}</TableCell>
+                        <TableCell>{commande.client_name || "-"}</TableCell>
                         <TableCell>{formatDate(commande.date_planifiee)}</TableCell>
                         <TableCell>{formatDate(commande.date_debut)}</TableCell>
                         <TableCell>{formatDate(commande.date_fin)}</TableCell>

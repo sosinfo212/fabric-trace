@@ -30,6 +30,7 @@ import {
   AlertOctagon,
   Target,
   PieChart,
+  Beaker,
   LucideIcon
 } from 'lucide-react';
 import { AppRole } from '@/types/roles';
@@ -118,19 +119,19 @@ export const menuConfig: MenuSection[] = [
   {
     title: 'Injection',
     icon: Boxes,
-    roles: ['admin', 'chef_de_chaine', 'agent_qualite', 'planificatrice', 'chef_equipe_injection'],
+    roles: ['admin', 'agent_qualite', 'planificatrice', 'chef_equipe_injection'],
     items: [
-      { title: 'Ordre de fabrication', url: '/injection/orders', icon: FileCheck, roles: ['admin', 'chef_de_chaine', 'agent_qualite', 'planificatrice'] },
-      { title: 'Déclaration fabrication', url: '/injection/declaration', icon: ClipboardCheck, roles: ['admin', 'chef_de_chaine', 'agent_qualite', 'planificatrice', 'chef_equipe_injection'] },
-      { title: 'Déclaration rebut', url: '/injection/waste', icon: Trash2, roles: ['admin', 'chef_de_chaine', 'agent_qualite', 'planificatrice', 'chef_equipe_injection'] },
+      { title: 'Ordre de fabrication', url: '/injection/orders', icon: FileCheck, roles: ['admin', 'agent_qualite', 'planificatrice'] },
+      { title: 'Déclaration fabrication', url: '/injection/declaration', icon: ClipboardCheck, roles: ['admin', 'agent_qualite', 'planificatrice', 'chef_equipe_injection'] },
+      { title: 'Déclaration rebut', url: '/injection/waste', icon: Trash2, roles: ['admin', 'agent_qualite', 'planificatrice', 'chef_equipe_injection'] },
     ],
   },
   {
     title: 'Messages',
     icon: MessageSquare,
-    roles: ['admin', 'planificatrice', 'responsable_magasin_pf', 'controle', 'chef_de_chaine', 'agent_qualite', 'chef_equipe_serigraphie', 'responsable_magasin', 'chef_equipe_injection', 'chef_equipe_pf', 'agent_logistique', 'agent_magasin', 'responsable_transport', 'operator'],
+    roles: ['admin', 'planificatrice', 'responsable_magasin_pf', 'controle', 'agent_qualite', 'chef_equipe_serigraphie', 'responsable_magasin', 'chef_equipe_injection', 'chef_equipe_pf', 'agent_logistique', 'agent_magasin', 'responsable_transport', 'operator'],
     items: [
-      { title: 'Chat/Messages', url: '/messages', icon: MessageSquare, roles: ['admin', 'planificatrice', 'responsable_magasin_pf', 'controle', 'chef_de_chaine', 'agent_qualite', 'chef_equipe_serigraphie', 'responsable_magasin', 'chef_equipe_injection', 'chef_equipe_pf', 'agent_logistique', 'agent_magasin', 'responsable_transport', 'operator'] },
+      { title: 'Chat/Messages', url: '/messages', icon: MessageSquare, roles: ['admin', 'planificatrice', 'responsable_magasin_pf', 'controle', 'agent_qualite', 'chef_equipe_serigraphie', 'responsable_magasin', 'chef_equipe_injection', 'chef_equipe_pf', 'agent_logistique', 'agent_magasin', 'responsable_transport', 'operator'] },
     ],
   },
   {
@@ -145,11 +146,22 @@ export const menuConfig: MenuSection[] = [
   {
     title: 'Gestion Composant',
     icon: PackageCheck,
-    roles: ['admin', 'chef_de_chaine', 'planificatrice', 'controle'],
+    roles: ['admin', 'planificatrice', 'controle', 'chef_de_chaine'],
     items: [
-      { title: 'Composants alternatifs', url: '/components/alternatives', icon: Package, roles: ['admin', 'chef_de_chaine', 'planificatrice', 'controle'] },
-      { title: 'Rebut hors production', url: '/components/waste', icon: Trash2, roles: ['admin', 'chef_de_chaine', 'planificatrice', 'controle'] },
-      { title: 'Rapport rebut', url: '/components/waste-report', icon: FileBarChart, roles: ['admin', 'chef_de_chaine', 'planificatrice', 'controle'] },
+      { title: 'Composants alternatifs', url: '/component-changes', icon: Package, roles: ['admin', 'planificatrice', 'controle', 'chef_de_chaine'] },
+      { title: 'Rebut hors production', url: '/components/waste', icon: Trash2, roles: ['admin', 'planificatrice', 'controle'] },
+      { title: 'Rapport rebut', url: '/components/waste-report', icon: FileBarChart, roles: ['admin', 'planificatrice', 'controle'] },
+    ],
+  },
+  {
+    title: 'Laboratoire',
+    icon: Beaker,
+    roles: ['admin', 'controle', 'planificatrice'],
+    items: [
+      { title: 'Ordre de fabrication', url: '/laboratoire/ordres', icon: ClipboardList, roles: ['admin', 'controle', 'planificatrice'] },
+      { title: 'Déclaration fabrication', url: '/laboratoire/declarations', icon: ClipboardCheck, roles: ['admin', 'controle', 'planificatrice'] },
+      { title: 'Stock', url: '/laboratoire/stock', icon: Boxes, roles: ['admin', 'controle', 'planificatrice'] },
+      { title: 'Rapport global', url: '/laboratoire/rapport', icon: PieChart, roles: ['admin', 'controle', 'planificatrice'] },
     ],
   },
   {
@@ -157,7 +169,7 @@ export const menuConfig: MenuSection[] = [
     icon: Truck,
     roles: ['admin', 'responsable_magasin_pf', 'chef_equipe_pf', 'responsable_transport', 'planificatrice'],
     items: [
-      { title: 'Packing lists', url: '/shipping/packing', icon: ListChecks, roles: ['admin', 'responsable_magasin_pf', 'responsable_transport', 'planificatrice'] },
+      { title: 'Listes de colisage', url: '/shipping/packing', icon: ListChecks, roles: ['admin', 'responsable_magasin_pf', 'responsable_transport', 'planificatrice'] },
       { title: 'Rapport préparation', url: '/shipping/preparation', icon: FileBarChart, roles: ['chef_equipe_pf', 'admin', 'responsable_magasin_pf', 'responsable_transport', 'planificatrice'] },
       { title: 'Fiche logistique', url: '/shipping/logistics', icon: ClipboardList, roles: ['chef_equipe_pf', 'admin', 'responsable_magasin_pf', 'responsable_transport'] },
       { title: 'Liste Manquant', url: '/shipping/missing', icon: AlertOctagon, roles: ['chef_equipe_pf', 'admin', 'responsable_magasin_pf', 'responsable_transport'] },

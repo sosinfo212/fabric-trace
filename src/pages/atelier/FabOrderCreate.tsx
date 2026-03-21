@@ -4,7 +4,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { supabase } from '@/integrations/supabase/client';
+import { fabOrdersApi, chainsApi, clientsApi, productsApi, commandesApi } from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { DashboardLayout } from '@/components/layouts/DashboardLayout';
@@ -40,6 +40,7 @@ const STATUS_OPTIONS = ['Planifié', 'En cours', 'Réalisé', 'Cloturé', 'Suspe
 
 const formSchema = z.object({
   of_id: z.string().min(1, 'OF ID requis').max(255),
+  product_id: z.string().optional(),
   prod_ref: z.string().max(255).optional(),
   prod_name: z.string().max(255).optional(),
   chaine_id: z.string().min(1, 'Chaîne requise'),
@@ -47,7 +48,6 @@ const formSchema = z.object({
   client_id: z.string().min(1, 'Client requis'),
   date_fabrication: z.date().optional(),
   pf_qty: z.coerce.number().min(0).default(0),
-  sf_qty: z.coerce.number().min(0).default(0),
   set_qty: z.coerce.number().min(0).default(0),
   tester_qty: z.coerce.number().min(0).default(0),
   lot_set: z.string().default(''),
@@ -61,20 +61,20 @@ type FormValues = z.infer<typeof formSchema>;
 export default function FabOrderCreatePage() {
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
-  const { loading: roleLoading, hasAccess } = useUserRole();
+  const { loading: roleLoading, hasMenuAccess } = useUserRole();
 
-  const canAccess = hasAccess(['admin', 'chef_chaine', 'chef_de_chaine', 'controle']);
+  const canAccess = hasMenuAccess('/atelier/fab-orders');
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       of_id: '',
+      product_id: '',
       prod_ref: '',
       prod_name: '',
       sale_order_id: '',
       lot_set: '',
       pf_qty: 0,
-      sf_qty: 0,
       set_qty: 0,
       tester_qty: 0,
       instruction: '',
@@ -87,12 +87,8 @@ export default function FabOrderCreatePage() {
   const { data: chaines } = useQuery({
     queryKey: ['chaines'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('chaines')
-        .select('id, num_chaine')
-        .order('num_chaine');
-      if (error) throw error;
-      return data;
+      const data = await chainsApi.getAll();
+      return data.map((c: any) => ({ id: c.id, num_chaine: c.num_chaine }));
     },
     enabled: !!user,
   });
@@ -101,12 +97,8 @@ export default function FabOrderCreatePage() {
   const { data: clients } = useQuery({
     queryKey: ['clients'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('clients')
-        .select('id, name, designation, instruction')
-        .order('name');
-      if (error) throw error;
-      return data;
+      const data = await clientsApi.getAll();
+      return data.map((c: any) => ({ id: c.id, name: c.name, designation: c.designation, instruction: c.instruction }));
     },
     enabled: !!user,
   });
@@ -115,12 +107,13 @@ export default function FabOrderCreatePage() {
   const { data: commandes } = useQuery({
     queryKey: ['commandes'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('commandes')
-        .select('id, num_commande')
-        .order('num_commande');
-      if (error) throw error;
-      return data;
+      const data = await commandesApi.getAll();
+      return data.map((c: any) => ({ 
+        id: c.id, 
+        num_commande: c.num_commande,
+        client_id: c.client_id,
+        client_name: c.client_name
+      }));
     },
     enabled: !!user,
   });
@@ -129,12 +122,8 @@ export default function FabOrderCreatePage() {
   const { data: products } = useQuery({
     queryKey: ['products'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('products')
-        .select('id, ref_id, product_name')
-        .order('product_name');
-      if (error) throw error;
-      return data;
+      const data = await productsApi.getAll();
+      return data.map((p: any) => ({ id: p.id, ref_id: p.ref_id, product_name: p.product_name }));
     },
     enabled: !!user,
   });
@@ -179,24 +168,23 @@ export default function FabOrderCreatePage() {
   // Create mutation
   const createMutation = useMutation({
     mutationFn: async (values: FormValues) => {
-      const { error } = await supabase.from('fab_orders').insert({
+      await fabOrdersApi.create({
         of_id: values.of_id,
-        prod_ref: values.prod_ref || null,
-        prod_name: values.prod_name || null,
+        product_id: values.product_id || undefined,
+        prod_ref: values.prod_ref || undefined,
+        prod_name: values.prod_name || undefined,
         chaine_id: values.chaine_id,
         sale_order_id: values.sale_order_id,
         client_id: values.client_id,
-        date_fabrication: values.date_fabrication?.toISOString() || null,
+        date_fabrication: values.date_fabrication?.toISOString() || undefined,
         pf_qty: values.pf_qty,
-        sf_qty: values.sf_qty,
         set_qty: values.set_qty,
         tester_qty: values.tester_qty,
         lot_set: values.lot_set,
-        instruction: values.instruction || null,
-        comment: values.comment || null,
+        instruction: values.instruction || undefined,
+        comment: values.comment || undefined,
         statut_of: values.statut_of,
       });
-      if (error) throw error;
     },
     onSuccess: () => {
       toast({ title: 'Ordre créé avec succès' });
@@ -206,6 +194,23 @@ export default function FabOrderCreatePage() {
       toast({ title: 'Erreur', description: error.message, variant: 'destructive' });
     },
   });
+
+  // Handle commande change - fill client
+  const handleCommandeChange = (commandeNum: string) => {
+    form.setValue('sale_order_id', commandeNum);
+    const commande = commandes?.find((c) => c.num_commande === commandeNum);
+    if (commande?.client_id && commande?.client_name) {
+      // Find the client by ID to get the name
+      const client = clients?.find((c) => c.id === commande.client_id);
+      if (client) {
+        form.setValue('client_id', client.name);
+        // Also fill instruction if available
+        if (client.instruction) {
+          form.setValue('instruction', client.instruction);
+        }
+      }
+    }
+  };
 
   // Handle client change - fill instruction
   const handleClientChange = (clientName: string) => {
@@ -218,10 +223,14 @@ export default function FabOrderCreatePage() {
 
   // Handle product change - fill ref and name
   const handleProductChange = (productId: string) => {
+    form.setValue('product_id', productId);
     const product = products?.find((p) => p.id === productId);
     if (product) {
       form.setValue('prod_ref', product.ref_id);
       form.setValue('prod_name', product.product_name);
+    } else {
+      form.setValue('prod_ref', '');
+      form.setValue('prod_name', '');
     }
   };
 
@@ -292,7 +301,7 @@ export default function FabOrderCreatePage() {
                           <SearchableCombobox
                             options={commandeOptions}
                             value={field.value}
-                            onValueChange={field.onChange}
+                            onValueChange={handleCommandeChange}
                             placeholder="Sélectionner une commande"
                             searchPlaceholder="Rechercher une commande..."
                             emptyText="Aucune commande trouvée"
@@ -345,40 +354,21 @@ export default function FabOrderCreatePage() {
                     )}
                   />
 
-                  <FormItem>
-                    <FormLabel>Produit</FormLabel>
-                    <SearchableCombobox
-                      options={productOptions}
-                      value=""
-                      onValueChange={handleProductChange}
-                      placeholder="Sélectionner un produit"
-                      searchPlaceholder="Rechercher par nom ou référence..."
-                      emptyText="Aucun produit trouvé"
-                    />
-                  </FormItem>
-
                   <FormField
                     control={form.control}
-                    name="prod_ref"
+                    name="product_id"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Référence Produit</FormLabel>
+                        <FormLabel>Produit</FormLabel>
                         <FormControl>
-                          <Input {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="prod_name"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Nom Produit</FormLabel>
-                        <FormControl>
-                          <Input {...field} />
+                          <SearchableCombobox
+                            options={productOptions}
+                            value={field.value || ''}
+                            onValueChange={handleProductChange}
+                            placeholder="Sélectionner un produit"
+                            searchPlaceholder="Rechercher par nom ou référence..."
+                            emptyText="Aucun produit trouvé"
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -425,6 +415,9 @@ export default function FabOrderCreatePage() {
                     )}
                   />
 
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                   <FormField
                     control={form.control}
                     name="statut_of"
@@ -449,29 +442,13 @@ export default function FabOrderCreatePage() {
                       </FormItem>
                     )}
                   />
-                </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <FormField
                     control={form.control}
                     name="pf_qty"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>PF Qty</FormLabel>
-                        <FormControl>
-                          <Input type="number" min={0} {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="sf_qty"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>SF Qty</FormLabel>
                         <FormControl>
                           <Input type="number" min={0} {...field} />
                         </FormControl>
@@ -507,21 +484,21 @@ export default function FabOrderCreatePage() {
                       </FormItem>
                     )}
                   />
-                </div>
 
-                <FormField
-                  control={form.control}
-                  name="lot_set"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Lot/Set</FormLabel>
-                      <FormControl>
-                        <Input {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                  <FormField
+                    control={form.control}
+                    name="lot_set"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Lot/Set</FormLabel>
+                        <FormControl>
+                          <Input {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
 
                 <FormField
                   control={form.control}

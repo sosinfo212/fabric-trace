@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { Navigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { rolesApi, userRolesApi } from '@/lib/api';
 import { DashboardLayout } from '@/components/layouts/DashboardLayout';
 import { AppRole, ROLE_LABELS } from '@/types/roles';
 import { Button } from '@/components/ui/button';
@@ -54,7 +54,8 @@ interface CustomRole {
 
 export default function RolesPage() {
   const { user, loading: authLoading } = useAuth();
-  const { role, hasAccess, loading: roleLoading } = useUserRole();
+  const { role, hasMenuAccess, allowedMenuPaths, loading: roleLoading } = useUserRole();
+  const canAccessPage = role === 'admin' || (Array.isArray(allowedMenuPaths) && allowedMenuPaths.includes('/admin/roles'));
   const { toast } = useToast();
 
   const [roles, setRoles] = useState<CustomRole[]>([]);
@@ -73,31 +74,21 @@ export default function RolesPage() {
     setLoading(true);
     try {
       // Fetch custom roles
-      const { data: rolesData, error: rolesError } = await supabase
-        .from('custom_roles')
-        .select('*')
-        .order('is_system', { ascending: false })
-        .order('label');
-
-      if (rolesError) throw rolesError;
+      const rolesData = await rolesApi.getAll();
 
       // Fetch user counts per role
-      const { data: userRoles, error: userRolesError } = await supabase
-        .from('user_roles')
-        .select('role');
-
-      if (userRolesError) throw userRolesError;
+      const userRoles = await userRolesApi.getAll();
 
       // Count users per role
       const roleCounts: Record<string, number> = {};
-      userRoles?.forEach((ur) => {
+      userRoles.forEach((ur: any) => {
         roleCounts[ur.role] = (roleCounts[ur.role] || 0) + 1;
       });
 
-      const rolesWithCounts = rolesData?.map((r) => ({
+      const rolesWithCounts = rolesData.map((r: any) => ({
         ...r,
         user_count: roleCounts[r.name] || 0,
-      })) || [];
+      }));
 
       setRoles(rolesWithCounts);
     } catch (error) {
@@ -113,10 +104,10 @@ export default function RolesPage() {
   };
 
   useEffect(() => {
-    if (user && role === 'admin') {
+    if (user && canAccessPage) {
       fetchRoles();
     }
-  }, [user, role]);
+  }, [user, canAccessPage]);
 
   const resetForm = () => {
     setFormName('');
@@ -137,14 +128,11 @@ export default function RolesPage() {
     try {
       setSubmitting(true);
 
-      const { error } = await supabase.from('custom_roles').insert({
+      await rolesApi.create({
         name: formName.toLowerCase().replace(/\s+/g, '_'),
         label: formLabel,
-        description: formDescription || null,
-        is_system: false,
+        description: formDescription || undefined,
       });
-
-      if (error) throw error;
 
       toast({
         title: 'Succès',
@@ -179,15 +167,10 @@ export default function RolesPage() {
     try {
       setSubmitting(true);
 
-      const { error } = await supabase
-        .from('custom_roles')
-        .update({
-          label: formLabel,
-          description: formDescription || null,
-        })
-        .eq('id', selectedRole.id);
-
-      if (error) throw error;
+      await rolesApi.update(selectedRole.id, {
+        label: formLabel,
+        description: formDescription || undefined,
+      });
 
       toast({
         title: 'Succès',
@@ -221,12 +204,7 @@ export default function RolesPage() {
     }
 
     try {
-      const { error } = await supabase
-        .from('custom_roles')
-        .delete()
-        .eq('id', roleToDelete.id);
-
-      if (error) throw error;
+      await rolesApi.delete(roleToDelete.id);
 
       toast({
         title: 'Succès',
@@ -264,7 +242,7 @@ export default function RolesPage() {
     return <Navigate to="/auth" replace />;
   }
 
-  if (!hasAccess(['admin'])) {
+  if (!hasMenuAccess('/admin/roles')) {
     return <Navigate to="/" replace />;
   }
 

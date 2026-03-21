@@ -33,7 +33,7 @@ export function AppSidebar() {
   const collapsed = state === 'collapsed';
   const location = useLocation();
   const { user, signOut } = useAuth();
-  const { role, hasAccess } = useUserRole();
+  const { role, hasMenuAccess } = useUserRole();
   const [openSections, setOpenSections] = useState<string[]>([]);
 
   const toggleSection = (title: string) => {
@@ -46,9 +46,13 @@ export function AppSidebar() {
 
   const isActive = (path: string) => location.pathname === path;
 
-  const filteredSections = menuConfig.filter((section) =>
-    hasAccess(section.roles)
-  );
+  // Sidebar is fully driven by permissions from DB (Administration → Permissions)
+  const filteredSections = menuConfig
+    .map((section) => ({
+      ...section,
+      items: section.items.filter((item) => hasMenuAccess(item.url)),
+    }))
+    .filter((section) => section.items.length > 0);
 
   return (
     <Sidebar className={cn(collapsed ? 'w-14' : 'w-64')} collapsible="icon">
@@ -59,7 +63,7 @@ export function AppSidebar() {
               <span className="text-primary-foreground font-bold text-sm">FT</span>
             </div>
             <div className="flex flex-col">
-              <span className="font-semibold text-sm">Fabrication Tracker</span>
+              <span className="font-semibold text-sm">Fab Track</span>
               {role && (
                 <span className="text-xs text-muted-foreground">
                   {ROLE_LABELS[role]}
@@ -79,14 +83,8 @@ export function AppSidebar() {
 
       <SidebarContent className="px-2 py-4">
         {filteredSections.map((section) => {
-          const filteredItems = section.items.filter((item) =>
-            hasAccess(item.roles)
-          );
-
-          if (filteredItems.length === 0) return null;
-
           const isOpen = openSections.includes(section.title);
-          const hasActiveItem = filteredItems.some((item) =>
+          const hasActiveItem = section.items.some((item) =>
             isActive(item.url)
           );
 
@@ -120,7 +118,7 @@ export function AppSidebar() {
                 <CollapsibleContent>
                   <SidebarGroupContent>
                     <SidebarMenu>
-                      {filteredItems.map((item) => (
+                      {section.items.map((item) => (
                         <SidebarMenuItem key={item.title}>
                           <SidebarMenuButton asChild>
                             <NavLink

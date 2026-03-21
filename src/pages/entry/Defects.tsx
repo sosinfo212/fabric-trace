@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { Navigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { defectsApi } from '@/lib/api';
 import { DashboardLayout } from '@/components/layouts/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -73,7 +73,8 @@ interface Defaut {
 
 export default function DefectsPage() {
   const { user, loading: authLoading } = useAuth();
-  const { hasAccess, loading: roleLoading } = useUserRole();
+  const { role, hasMenuAccess, allowedMenuPaths, loading: roleLoading } = useUserRole();
+  const canAccessPage = role === 'admin' || (Array.isArray(allowedMenuPaths) && allowedMenuPaths.includes('/entry/defects'));
   const { toast } = useToast();
 
   const [categories, setCategories] = useState<DefautCategory[]>([]);
@@ -99,28 +100,18 @@ export default function DefectsPage() {
     setLoading(true);
     try {
       // Fetch categories
-      const { data: categoriesData, error: categoriesError } = await supabase
-        .from('defaut_categories')
-        .select('*')
-        .order('category_name');
-
-      if (categoriesError) throw categoriesError;
+      const categoriesData = await defectsApi.getCategories();
 
       // Fetch defects with category info
-      const { data: defectsData, error: defectsError } = await supabase
-        .from('defaut_list')
-        .select('*, category:defaut_categories(id, category_name)')
-        .order('label');
-
-      if (defectsError) throw defectsError;
+      const defectsData = await defectsApi.getAll();
 
       // Count defects per category
       const categoryCounts: Record<string, number> = {};
-      defectsData?.forEach((d) => {
+      defectsData?.forEach((d: any) => {
         categoryCounts[d.category_id] = (categoryCounts[d.category_id] || 0) + 1;
       });
 
-      const categoriesWithCounts = categoriesData?.map((c) => ({
+      const categoriesWithCounts = categoriesData?.map((c: any) => ({
         ...c,
         defect_count: categoryCounts[c.id] || 0,
       })) || [];
@@ -140,10 +131,10 @@ export default function DefectsPage() {
   };
 
   useEffect(() => {
-    if (user && hasAccess(['admin'])) {
+    if (user && !roleLoading && canAccessPage) {
       fetchData();
     }
-  }, [user]);
+  }, [user, roleLoading, canAccessPage]);
 
   // Category handlers
   const handleCreateCategory = async () => {
@@ -154,11 +145,7 @@ export default function DefectsPage() {
 
     try {
       setSubmitting(true);
-      const { error } = await supabase
-        .from('defaut_categories')
-        .insert({ category_name: categoryName.trim() });
-
-      if (error) throw error;
+      await defectsApi.createCategory({ category_name: categoryName.trim() });
 
       toast({ title: 'Succès', description: 'Catégorie créée' });
       setIsCategoryCreateOpen(false);
@@ -176,12 +163,7 @@ export default function DefectsPage() {
 
     try {
       setSubmitting(true);
-      const { error } = await supabase
-        .from('defaut_categories')
-        .update({ category_name: categoryName.trim() })
-        .eq('id', selectedCategory.id);
-
-      if (error) throw error;
+      await defectsApi.updateCategory(selectedCategory.id, { category_name: categoryName.trim() });
 
       toast({ title: 'Succès', description: 'Catégorie mise à jour' });
       setIsCategoryEditOpen(false);
@@ -197,12 +179,7 @@ export default function DefectsPage() {
 
   const handleDeleteCategory = async (category: DefautCategory) => {
     try {
-      const { error } = await supabase
-        .from('defaut_categories')
-        .delete()
-        .eq('id', category.id);
-
-      if (error) throw error;
+      await defectsApi.deleteCategory(category.id);
 
       toast({ title: 'Succès', description: 'Catégorie supprimée' });
       fetchData();
@@ -220,11 +197,7 @@ export default function DefectsPage() {
 
     try {
       setSubmitting(true);
-      const { error } = await supabase
-        .from('defaut_list')
-        .insert({ label: defectLabel.trim(), category_id: defectCategoryId });
-
-      if (error) throw error;
+      await defectsApi.create({ label: defectLabel.trim(), category_id: defectCategoryId });
 
       toast({ title: 'Succès', description: 'Défaut créé' });
       setIsDefectCreateOpen(false);
@@ -243,12 +216,7 @@ export default function DefectsPage() {
 
     try {
       setSubmitting(true);
-      const { error } = await supabase
-        .from('defaut_list')
-        .update({ label: defectLabel.trim(), category_id: defectCategoryId })
-        .eq('id', selectedDefect.id);
-
-      if (error) throw error;
+      await defectsApi.update(selectedDefect.id, { label: defectLabel.trim(), category_id: defectCategoryId });
 
       toast({ title: 'Succès', description: 'Défaut mis à jour' });
       setIsDefectEditOpen(false);
@@ -265,12 +233,7 @@ export default function DefectsPage() {
 
   const handleDeleteDefect = async (defect: Defaut) => {
     try {
-      const { error } = await supabase
-        .from('defaut_list')
-        .delete()
-        .eq('id', defect.id);
-
-      if (error) throw error;
+      await defectsApi.delete(defect.id);
 
       toast({ title: 'Succès', description: 'Défaut supprimé' });
       fetchData();
@@ -309,7 +272,7 @@ export default function DefectsPage() {
     return <Navigate to="/auth" replace />;
   }
 
-  if (!hasAccess(['admin'])) {
+  if (!hasMenuAccess('/entry/defects')) {
     return <Navigate to="/" replace />;
   }
 

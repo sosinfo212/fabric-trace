@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { Navigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { clientsApi } from '@/lib/api';
 import { DashboardLayout } from '@/components/layouts/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -60,7 +60,8 @@ const clientSchema = z.object({
 
 export default function ClientsPage() {
   const { user, loading: authLoading } = useAuth();
-  const { hasAccess, loading: roleLoading } = useUserRole();
+  const { role, hasMenuAccess, allowedMenuPaths, loading: roleLoading } = useUserRole();
+  const canAccessPage = role === 'admin' || (Array.isArray(allowedMenuPaths) && allowedMenuPaths.includes('/entry/clients'));
   const { toast } = useToast();
 
   const [clients, setClients] = useState<Client[]>([]);
@@ -80,13 +81,8 @@ export default function ClientsPage() {
   const fetchClients = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('clients')
-        .select('*')
-        .order('name');
-
-      if (error) throw error;
-      setClients(data || []);
+      const data = await clientsApi.getAll();
+      setClients(data);
     } catch (error) {
       console.error('Error fetching clients:', error);
       toast({
@@ -100,10 +96,10 @@ export default function ClientsPage() {
   };
 
   useEffect(() => {
-    if (user && hasAccess(['admin', 'planificatrice'])) {
+    if (user && !roleLoading && canAccessPage) {
       fetchClients();
     }
-  }, [user]);
+  }, [user, roleLoading, canAccessPage]);
 
   const resetForm = () => {
     setFormName('');
@@ -132,14 +128,12 @@ export default function ClientsPage() {
 
       setSubmitting(true);
 
-      const { error } = await supabase.from('clients').insert({
+      await clientsApi.create({
         name: formName,
-        designation: formDesignation || null,
-        instruction: formInstruction || null,
-        instruction_logistique: formInstructionLogistique || null,
+        designation: formDesignation || undefined,
+        instruction: formInstruction || undefined,
+        instruction_logistique: formInstructionLogistique || undefined,
       });
-
-      if (error) throw error;
 
       toast({
         title: 'Succès',
@@ -183,17 +177,12 @@ export default function ClientsPage() {
 
       setSubmitting(true);
 
-      const { error } = await supabase
-        .from('clients')
-        .update({
-          name: formName,
-          designation: formDesignation || null,
-          instruction: formInstruction || null,
-          instruction_logistique: formInstructionLogistique || null,
-        })
-        .eq('id', selectedClient.id);
-
-      if (error) throw error;
+      await clientsApi.update(selectedClient.id, {
+        name: formName,
+        designation: formDesignation || undefined,
+        instruction: formInstruction || undefined,
+        instruction_logistique: formInstructionLogistique || undefined,
+      });
 
       toast({
         title: 'Succès',
@@ -218,12 +207,7 @@ export default function ClientsPage() {
 
   const handleDelete = async (client: Client) => {
     try {
-      const { error } = await supabase
-        .from('clients')
-        .delete()
-        .eq('id', client.id);
-
-      if (error) throw error;
+      await clientsApi.delete(client.id);
 
       toast({
         title: 'Succès',
@@ -267,7 +251,7 @@ export default function ClientsPage() {
     return <Navigate to="/auth" replace />;
   }
 
-  if (!hasAccess(['admin', 'planificatrice'])) {
+  if (!hasMenuAccess('/entry/clients')) {
     return <Navigate to="/" replace />;
   }
 

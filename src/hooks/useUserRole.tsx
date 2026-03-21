@@ -1,41 +1,50 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { userRoleApi } from '@/lib/api';
 import { useAuth } from './useAuth';
 import { AppRole } from '@/types/roles';
 
 export const useUserRole = () => {
   const { user } = useAuth();
   const [role, setRole] = useState<AppRole | null>(null);
+  const [allowedMenuPaths, setAllowedMenuPaths] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchRole = async () => {
-      if (!user) {
-        setRole(null);
-        setLoading(false);
-        return;
-      }
+    if (!user) {
+      setRole(null);
+      setAllowedMenuPaths([]);
+      setLoading(false);
+      return;
+    }
 
+    setLoading(true);
+    let cancelled = false;
+
+    const fetchRoleAndPermissions = async () => {
       try {
-        const { data, error } = await supabase.rpc('get_user_role', {
-          _user_id: user.id,
-        });
-
-        if (error) {
-          console.error('Error fetching user role:', error);
-          setRole(null);
-        } else {
-          setRole(data as AppRole);
+        const [roleRes, permsRes] = await Promise.all([
+          userRoleApi.getRole(),
+          userRoleApi.getPermissions(),
+        ]);
+        if (!cancelled) {
+          setRole(roleRes.role as AppRole | null);
+          setAllowedMenuPaths(Array.isArray(permsRes.menu_paths) ? permsRes.menu_paths : []);
         }
       } catch (err) {
-        console.error('Error fetching user role:', err);
-        setRole(null);
+        console.error('Error fetching user role/permissions:', err);
+        if (!cancelled) {
+          setRole(null);
+          setAllowedMenuPaths([]);
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
-    fetchRole();
+    fetchRoleAndPermissions();
+    return () => {
+      cancelled = true;
+    };
   }, [user]);
 
   const hasAccess = (allowedRoles: AppRole[]): boolean => {
@@ -43,5 +52,22 @@ export const useUserRole = () => {
     return allowedRoles.includes(role);
   };
 
-  return { role, loading, hasAccess };
+  /** Whether the user can see a menu item (sidebar). Fully driven by DB permissions; admin always has access. */
+  const hasMenuAccess = (menuPath: string): boolean => {
+    if (role === 'admin') return true;
+    if (!role) return false;
+    return allowedMenuPaths.includes(menuPath);
+  };
+
+  /** Whether the user can access a route (exact path or sub-path of an allowed menu path). */
+  const hasRouteAccess = (pathname: string): boolean => {
+    if (role === 'admin') return true;
+    if (!role) return false;
+    if (allowedMenuPaths.includes(pathname)) return true;
+    return allowedMenuPaths.some((p) => pathname.startsWith(p + '/'));
+  };
+
+  const isAdmin = role === 'admin';
+
+  return { role, loading, hasAccess, hasMenuAccess, hasRouteAccess, allowedMenuPaths, isAdmin };
 };
