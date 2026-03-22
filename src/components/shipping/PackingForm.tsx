@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useState } from 'react';
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, arrayMove, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -139,17 +139,24 @@ function SortableRow({
   );
 }
 
-export function PackingForm({
-  initial,
-  onSubmit,
-  loading,
-  showAdvancedFields = false,
-}: {
+export type PackingFormHandle = {
+  /** Persists Container, Client, Proforma, Date, Navalock, Volume, Notes (PATCH). Edit mode only. */
+  saveHeaderFields: () => Promise<void>;
+};
+
+type PackingFormProps = {
   initial?: PackingListWithRelations | null;
   onSubmit: (payload: CreatePackingListInput) => Promise<void>;
   loading?: boolean;
   showAdvancedFields?: boolean;
-}) {
+  /** When set, `ref.current.saveHeaderFields()` updates header via API without saving line items. */
+  packingListId?: number;
+};
+
+export const PackingForm = forwardRef<PackingFormHandle, PackingFormProps>(function PackingForm(
+  { initial, onSubmit, loading, showAdvancedFields = false, packingListId },
+  ref,
+) {
   const [container, setContainer] = useState(initial?.container ?? '');
   const [client, setClient] = useState(initial?.client ?? '');
   const [proforma, setProforma] = useState(initial?.proforma ?? '');
@@ -178,6 +185,35 @@ export function PackingForm({
         }))
       : [],
   );
+
+  /** When React Query refetches (e.g. after navigating back), reset local state from server — initial useState only runs on first mount. */
+  useEffect(() => {
+    if (!initial) return;
+    setContainer(initial.container ?? '');
+    setClient(initial.client ?? '');
+    setProforma(initial.proforma ?? '');
+    setDate((initial.date ?? new Date().toISOString().slice(0, 10)).slice(0, 10));
+    setNotes(initial.notes ?? '');
+    setNavalock(initial.navalock ?? '');
+    setVolume(initial.volume ?? '');
+    setItems(
+      initial.items?.length
+        ? initial.items.map((it) => ({
+            localId: `existing-${it.id}`,
+            id: it.id,
+            pal_no: it.palNo,
+            type_pal: (it.typePal as '_' | 'ER') || '_',
+            pal_kgs: it.palKgs,
+            designation: it.designation,
+            quantity: it.quantity,
+            boxes: it.boxes,
+            pieces: it.pieces,
+            statut_pal: it.statutPal,
+          }))
+        : [],
+    );
+    setDeletedItems([]);
+  }, [initial?.updatedAt]);
 
   useEffect(() => {
     let active = true;
@@ -321,6 +357,41 @@ export function PackingForm({
     });
   };
 
+  const saveHeaderFields = useCallback(async () => {
+    if (packingListId == null) {
+      toast({
+        title: 'Action impossible',
+        description: "Enregistrez d'abord la liste pour pouvoir sauver l'en-tête.",
+        variant: 'destructive',
+      });
+      return;
+    }
+    if (!container.trim() || !client.trim() || !proforma.trim() || !date) {
+      toast({ title: 'Champs obligatoires', description: 'Container, client, proforma et date sont requis.', variant: 'destructive' });
+      return;
+    }
+    try {
+      await packingApi.updateHeader(packingListId, {
+        container: container.trim(),
+        client: client.trim(),
+        proforma: proforma.trim(),
+        date,
+        notes: notes || null,
+        navalock: navalock || null,
+        volume: volume || null,
+      });
+      toast({ title: 'En-tête enregistré.' });
+    } catch (e: unknown) {
+      toast({
+        title: 'Erreur',
+        description: e instanceof Error ? e.message : 'Échec de mise à jour.',
+        variant: 'destructive',
+      });
+    }
+  }, [packingListId, container, client, proforma, date, notes, navalock, volume]);
+
+  useImperativeHandle(ref, () => ({ saveHeaderFields }), [saveHeaderFields]);
+
   return (
     <form className="space-y-4" onSubmit={submit}>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
@@ -429,4 +500,6 @@ export function PackingForm({
       </div>
     </form>
   );
-}
+});
+
+PackingForm.displayName = 'PackingForm';

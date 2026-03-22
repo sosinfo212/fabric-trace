@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -12,15 +12,24 @@ export function WeightSetSection({
   packingListId,
   initialWeightSets,
   itemData,
+  syncKey,
 }: {
   packingListId: number;
   initialWeightSets: WeightSet[];
   itemData: Record<string, { weight: number; price: number }>;
+  /** e.g. packing.updatedAt — when parent refetches, sync saved weight sets from server */
+  syncKey?: string;
 }) {
   const [rows, setRows] = useState<DraftRow[]>([]);
   const [existing, setExisting] = useState<WeightSet[]>(initialWeightSets);
   const [saving, setSaving] = useState(false);
   const [clearing, setClearing] = useState(false);
+
+  useEffect(() => {
+    setExisting(initialWeightSets);
+    // Only when packing list revision changes (refetch); avoids resetting on every parent render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [syncKey]);
 
   const itemNames = useMemo(() => Object.keys(itemData), [itemData]);
 

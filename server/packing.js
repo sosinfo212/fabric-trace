@@ -248,6 +248,44 @@ export function registerPackingRoutes(app, pool, authenticateToken) {
     res.json({ success: true, data: WEIGHT_SET_ITEMS });
   });
 
+  /** Update header fields only (container, client, proforma, date, navalock, volume, notes) — does not touch line items. */
+  const updatePackingHeader = async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id)) {
+        return res.status(400).json({ success: false, message: 'ID invalide' });
+      }
+      const {
+        container,
+        client,
+        proforma,
+        date,
+        notes = null,
+        navalock = null,
+        volume = null,
+      } = req.body;
+      if (!container || !client || !proforma || !date) {
+        return res.status(400).json({ success: false, message: 'Données invalides' });
+      }
+      const [existing] = await pool.execute('SELECT id FROM packing_lists WHERE id = ? LIMIT 1', [id]);
+      if (!existing.length) {
+        return res.status(404).json({ success: false, message: 'Packing list introuvable' });
+      }
+      await pool.execute(
+        `UPDATE packing_lists
+         SET container = ?, client = ?, proforma = ?, date = ?, notes = ?, navalock = ?, volume = ?
+         WHERE id = ?`,
+        [container, client, proforma, date, notes, navalock, volume, id],
+      );
+      res.json({ success: true, message: 'En-tête enregistré' });
+    } catch (error) {
+      console.error('Error updating packing list header:', error);
+      res.status(500).json({ success: false, message: 'Erreur mise à jour en-tête' });
+    }
+  };
+  app.patch('/api/shipping/packing/:id/header', authenticateToken, updatePackingHeader);
+  app.put('/api/shipping/packing/:id/header', authenticateToken, updatePackingHeader);
+
   app.get('/api/shipping/packing/:id', authenticateToken, async (req, res) => {
     try {
       const id = Number(req.params.id);

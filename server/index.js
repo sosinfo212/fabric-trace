@@ -2956,7 +2956,7 @@ app.get('/api/fab-orders/declaration/fabrication-history', authenticateToken, as
 app.get('/api/fab-orders/declaration', authenticateToken, async (req, res) => {
   try {
     const [orders] = await pool.execute(
-      `SELECT
+      `SELECT 
         fo.id,
         fo.of_id,
         fo.product_id,
@@ -3458,9 +3458,9 @@ app.put('/api/fab-orders/:id', authenticateToken, async (req, res) => {
     values.push(id);
 
     const query = `UPDATE fab_orders SET ${fields.join(', ')} WHERE id = ?`;
-
+    
     const [result] = await pool.execute(query, values);
-
+    
     if (result.affectedRows === 0) {
       return res.status(404).json({ error: 'Ordre de fabrication non trouvé' });
     }
@@ -3470,7 +3470,7 @@ app.put('/api/fab-orders/:id', authenticateToken, async (req, res) => {
     console.error('Update fab order error:', error);
     console.error('Error details:', error.message);
     console.error('Error stack:', error.stack);
-
+    
     if (error.code === 'ER_NO_REFERENCED_ROW_2' || error.code === 'ER_ROW_IS_REFERENCED_2') {
       return res.status(400).json({ error: 'Référence invalide (clé étrangère)' });
     }

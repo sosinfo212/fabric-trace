@@ -1,18 +1,22 @@
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layouts/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks/use-toast';
 import { packingApi, type CreatePackingListInput } from '@/lib/api';
-import { PackingForm } from '@/components/shipping/PackingForm';
+import { PackingForm, type PackingFormHandle } from '@/components/shipping/PackingForm';
 import { WeightSetSection } from '@/components/shipping/WeightSetSection';
 
 export default function PackingEditPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const packingListId = Number(id);
+  const formRef = useRef<PackingFormHandle>(null);
+  const [savingHeader, setSavingHeader] = useState(false);
+  const queryClient = useQueryClient();
 
-  const { data, isLoading, refetch } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ['packing-list', packingListId],
     queryFn: async () => {
       const [packing, itemData] = await Promise.all([
@@ -22,12 +26,16 @@ export default function PackingEditPage() {
       return { packing, itemData };
     },
     enabled: Number.isFinite(packingListId),
+    /** Always refetch when opening edit so we never show only stale cache after a previous save. */
+    refetchOnMount: 'always',
   });
 
   const updateMutation = useMutation({
     mutationFn: (payload: CreatePackingListInput) => packingApi.update(packingListId, payload),
-    onSuccess: () => {
+    onSuccess: async () => {
       toast({ title: 'Packing list mise à jour.' });
+      await queryClient.invalidateQueries({ queryKey: ['packing-list', packingListId] });
+      await queryClient.invalidateQueries({ queryKey: ['packing-lists'] });
       navigate('/shipping/packing');
     },
     onError: (e: unknown) =>
@@ -44,8 +52,19 @@ export default function PackingEditPage() {
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold">Modifier Packing List</h1>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => refetch()}>
-              Recharger
+            <Button
+              variant="outline"
+              disabled={savingHeader}
+              onClick={async () => {
+                setSavingHeader(true);
+                try {
+                  await formRef.current?.saveHeaderFields();
+                } finally {
+                  setSavingHeader(false);
+                }
+              }}
+            >
+              {savingHeader ? 'Enregistrement...' : 'Sauvegarder'}
             </Button>
             <Button variant="outline" onClick={() => navigate('/shipping/packing')}>
               Fermer
@@ -58,6 +77,8 @@ export default function PackingEditPage() {
         ) : (
           <div className="space-y-4">
             <PackingForm
+              ref={formRef}
+              packingListId={packingListId}
               initial={data.packing}
               showAdvancedFields
               loading={updateMutation.isPending}
@@ -67,6 +88,7 @@ export default function PackingEditPage() {
               packingListId={packingListId}
               initialWeightSets={data.packing.weightSets}
               itemData={data.itemData}
+              syncKey={data.packing.updatedAt}
             />
           </div>
         )}

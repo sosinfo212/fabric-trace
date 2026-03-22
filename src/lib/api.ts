@@ -744,6 +744,17 @@ export interface PackingListWithRelations {
   } | null;
 }
 
+/** Header-only update (PATCH) — no line items. */
+export interface UpdatePackingHeaderInput {
+  container: string;
+  client: string;
+  proforma: string;
+  date: string;
+  notes?: string | null;
+  navalock?: string | null;
+  volume?: string | null;
+}
+
 export interface CreatePackingListInput {
   container: string;
   client: string;
@@ -778,6 +789,11 @@ export const packingApi = {
     }),
   update: async (id: number, payload: CreatePackingListInput) =>
     apiRequest<{ success: boolean; message: string }>(`/shipping/packing/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+  updateHeader: async (id: number, payload: UpdatePackingHeaderInput) =>
+    apiRequest<{ success: boolean; message: string }>(`/shipping/packing/${id}/header`, {
       method: 'PUT',
       body: JSON.stringify(payload),
     }),
