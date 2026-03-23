@@ -1,8 +1,9 @@
-import { 
-  Users, 
-  Shield, 
-  Key, 
+import {
+  Users,
+  Shield,
+  Key,
   Database,
+  Activity,
   UserCircle,
   AlertTriangle,
   Link,
@@ -59,6 +60,7 @@ export const menuConfig: MenuSection[] = [
       { title: 'Rôles', url: '/admin/roles', icon: Key, roles: ['admin'] },
       { title: 'Permissions', url: '/admin/permissions', icon: Shield, roles: ['admin'] },
       { title: 'Sauvegardes', url: '/admin/backups', icon: Database, roles: ['admin'] },
+      { title: 'Journal d\'activité', url: '/admin/audit-logs', icon: Activity, roles: ['admin'] },
     ],
   },
   {

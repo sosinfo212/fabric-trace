@@ -3543,6 +3543,110 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
+// ─── Audit Log Middleware ────────────────────────────────────────────────────
+// Intercepts all mutating HTTP methods and writes a row to audit_logs after the
+// route handler finishes (only on success and for authenticated requests).
+app.use((req, res, next) => {
+  const method = req.method;
+  if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) return next();
+
+  // Skip auth and health routes
+  const url = req.originalUrl || req.url;
+  if (url.startsWith('/api/auth') || url === '/api/health') return next();
+
+  const originalJson = res.json.bind(res);
+  res.json = function (data) {
+    if (res.statusCode < 400 && req.user) {
+      const action =
+        method === 'POST'   ? 'CREATE' :
+        method === 'DELETE' ? 'DELETE' : 'UPDATE';
+
+      // Extract a readable table name from the URL path
+      const pathParts = url.replace('/api/', '').split('/').filter(Boolean);
+      const tableName = pathParts[0] || 'unknown';
+
+      // Record ID: prefer URL param, then response body id
+      const recordId =
+        req.params?.id ||
+        (data && (data.id || data.insertId)) ||
+        null;
+
+      pool.execute(
+        `INSERT INTO audit_logs (user_id, user_email, action, table_name, record_id, new_data, ip_address, endpoint)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          req.user?.id   || null,
+          req.user?.email || null,
+          action,
+          tableName,
+          recordId ? String(recordId) : null,
+          req.body && Object.keys(req.body).length ? JSON.stringify(req.body) : null,
+          req.ip || req.socket?.remoteAddress || null,
+          url,
+        ]
+      ).catch(err => console.error('[AuditLog] DB error:', err));
+    }
+    return originalJson(data);
+  };
+  next();
+});
+
+// ─── Audit Log Routes ────────────────────────────────────────────────────────
+// GET /api/audit-logs  — fetch with optional filters + pagination
+app.get('/api/audit-logs', authenticateToken, async (req, res) => {
+  try {
+    const {
+      page     = 1,
+      limit    = 50,
+      action,
+      table_name,
+      user_id,
+      search,
+      date_from,
+      date_to,
+    } = req.query;
+
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const conditions = [];
+    const params     = [];
+
+    if (action)     { conditions.push('action = ?');          params.push(action); }
+    if (table_name) { conditions.push('table_name = ?');      params.push(table_name); }
+    if (user_id)    { conditions.push('user_id = ?');         params.push(user_id); }
+    if (search)     { conditions.push('user_email LIKE ?');   params.push(`%${search}%`); }
+    if (date_from)  { conditions.push('created_at >= ?');     params.push(date_from); }
+    if (date_to)    { conditions.push('created_at <= ?');     params.push(date_to + ' 23:59:59'); }
+
+    const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
+
+    const [rows] = await pool.execute(
+      `SELECT * FROM audit_logs ${where} ORDER BY created_at DESC LIMIT ${parseInt(limit)} OFFSET ${offset}`,
+      params
+    );
+    const [[{ total }]] = await pool.execute(
+      `SELECT COUNT(*) AS total FROM audit_logs ${where}`,
+      params
+    );
+
+    res.json({ data: rows, total, page: parseInt(page), limit: parseInt(limit) });
+  } catch (error) {
+    console.error('GET /api/audit-logs error:', error);
+    res.status(500).json({ error: 'Erreur lors de la récupération des logs' });
+  }
+});
+
+// GET /api/audit-logs/tables — distinct table names for filter dropdown
+app.get('/api/audit-logs/tables', authenticateToken, async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      'SELECT DISTINCT table_name FROM audit_logs ORDER BY table_name'
+    );
+    res.json(rows.map(r => r.table_name));
+  } catch (error) {
+    res.status(500).json({ error: 'Erreur' });
+  }
+});
+
 // Transfert Fabrication (Atelier <-> Magasin)
 registerTransfertFabricationRoutes(app, pool, authenticateToken);
 registerComponentChangeRoutes(app, pool, authenticateToken);

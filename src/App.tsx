@@ -11,6 +11,7 @@ import UsersPage from "./pages/admin/Users";
 import RolesPage from "./pages/admin/Roles";
 import PermissionsPage from "./pages/admin/Permissions";
 import BackupsPage from "./pages/admin/Backups";
+import AuditLogsPage from "./pages/admin/AuditLogs";
 import ClientsPage from "./pages/entry/Clients";
 import DefectsPage from "./pages/entry/Defects";
 import ChainsPage from "./pages/entry/Chains";
@@ -78,6 +79,7 @@ const App = () => (
             <Route path="/admin/roles" element={<RolesPage />} />
             <Route path="/admin/permissions" element={<PermissionsPage />} />
             <Route path="/admin/backups" element={<BackupsPage />} />
+            <Route path="/admin/audit-logs" element={<AuditLogsPage />} />
             <Route path="/entry/clients" element={<ClientsPage />} />
             <Route path="/entry/defects" element={<DefectsPage />} />
             <Route path="/entry/chains" element={<ChainsPage />} />

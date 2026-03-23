@@ -128,6 +128,30 @@ export const usersApi = {
   },
 };
 
+// Audit Logs API
+export const auditLogsApi = {
+  getAll: async (params: {
+    page?: number;
+    limit?: number;
+    action?: string;
+    table_name?: string;
+    user_id?: string;
+    search?: string;
+    date_from?: string;
+    date_to?: string;
+  } = {}) => {
+    const qs = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => { if (v !== undefined && v !== '') qs.set(k, String(v)); });
+    return apiRequest<{ data: any[]; total: number; page: number; limit: number }>(
+      `/audit-logs?${qs.toString()}`
+    );
+  },
+
+  getTables: async () => {
+    return apiRequest<string[]>('/audit-logs/tables');
+  },
+};
+
 // Transfert Fabrication API
 export const transfertApi = {
   getToday: () =>
