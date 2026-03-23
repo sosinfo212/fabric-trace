@@ -291,7 +291,7 @@ export function registerLaboratoireRoutes(app, pool, authenticateToken) {
         `SELECT id, rack_id AS rackId, stage, place, produit, qty, lot, declaration_id AS declarationId, created_at AS createdAt
          FROM stock_labo
          WHERE rack_id = ? AND stage = ?
-         ORDER BY place ASC`,
+         ORDER BY place ASC, id ASC`,
         [rackId, stage]
       );
       res.json({ success: true, data: rows || [] });
@@ -321,9 +321,6 @@ export function registerLaboratoireRoutes(app, pool, authenticateToken) {
       );
       res.json({ success: true, id: result.insertId });
     } catch (error) {
-      if (error?.code === 'ER_DUP_ENTRY') {
-        return res.status(409).json({ success: false, error: 'Cet emplacement est déjà occupé.' });
-      }
       console.error('Laboratoire assign stock error:', error);
       res.status(500).json({ success: false, error: 'Erreur lors de l’affectation au stock.' });
     }

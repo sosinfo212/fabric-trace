@@ -194,10 +194,11 @@ export function CloturerFlow({
             ) : null}
           </CardContent>
         </Card>
-        <p className="mb-2 text-sm text-muted-foreground">Choisir un emplacement libre</p>
+        <p className="mb-2 text-sm text-muted-foreground">Choisir un emplacement (libre ou déjà occupé)</p>
         <RackPicker
           racks={racks}
           stockItems={stockItems}
+          allowOccupiedSelection
           selectedRackId={selection?.rackId}
           selectedStage={selection?.stage}
           selectedPlace={selection?.place}

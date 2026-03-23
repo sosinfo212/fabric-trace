@@ -10,6 +10,7 @@ export function RackPicker({
   selectedStage,
   selectedPlace,
   currentStockId,
+  allowOccupiedSelection,
   onSelect,
 }: {
   racks: LaboRack[];
@@ -18,6 +19,7 @@ export function RackPicker({
   selectedStage?: number;
   selectedPlace?: number;
   currentStockId?: number;
+  allowOccupiedSelection?: boolean;
   onSelect: (rackId: number, stage: number, place: number, rackName: string) => void;
 }) {
   const byKey = new Map(stockItems.map((s) => [`${s.rackId}-${s.stage}-${s.place}`, s]));
@@ -42,7 +44,7 @@ export function RackPicker({
                       const isSelected =
                         selectedRackId === rack.id && selectedStage === stage && selectedPlace === place;
                       const occupied = !!stock && !isCurrent;
-                      const clickable = !occupied && !isCurrent;
+                      const clickable = !isCurrent && (!occupied || !!allowOccupiedSelection);
                       return (
                         <button
                           key={place}
@@ -53,7 +55,10 @@ export function RackPicker({
                             'h-7 rounded text-[11px] transition',
                             'border border-border bg-muted/50 text-muted-foreground',
                             clickable && 'hover:border-primary hover:bg-primary/10 hover:text-primary',
-                            occupied && 'cursor-not-allowed border-destructive/50 bg-destructive/10 text-destructive',
+                            occupied &&
+                              (allowOccupiedSelection
+                                ? 'border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-300'
+                                : 'cursor-not-allowed border-destructive/50 bg-destructive/10 text-destructive'),
                             isCurrent && 'cursor-default border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-300',
                             isSelected && 'border-primary bg-primary/15 text-primary ring-1 ring-primary'
                           )}
