@@ -7,6 +7,17 @@ import { MoveProductModal } from './MoveProductModal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 export function StageModal({
   open,
@@ -17,6 +28,7 @@ export function StageModal({
   allRacks,
   allStock,
   onMove,
+  onDelete,
 }: {
   open: boolean;
   onClose: () => void;
@@ -26,6 +38,7 @@ export function StageModal({
   allRacks: LaboRack[];
   allStock: LaboStockItem[];
   onMove: (payload: { stockId: number; rackId: number; stage: number; place: number }) => Promise<void>;
+  onDelete: (stockId: number) => Promise<void>;
 }) {
   const [moveItem, setMoveItem] = useState<LaboStockItem | null>(null);
   if (!rack) return null;
@@ -51,9 +64,30 @@ export function StageModal({
                       <TableCell>{row.qty}</TableCell>
                       <TableCell className="font-mono text-sm">{row.lot}</TableCell>
                       <TableCell>
-                        <Button type="button" variant="outline" size="sm" onClick={() => setMoveItem(row)}>
-                          Déplacer
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          <Button type="button" variant="outline" size="sm" onClick={() => setMoveItem(row)}>
+                            Déplacer
+                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button type="button" variant="destructive" size="sm">
+                                Supprimer
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Supprimer ce produit du stock ?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Cette action est irreversible. Le produit sera retire definitivement de cet emplacement.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Annuler</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => void onDelete(row.id)}>Supprimer</AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}

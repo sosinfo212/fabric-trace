@@ -353,5 +353,19 @@ export function registerLaboratoireRoutes(app, pool, authenticateToken) {
       res.status(500).json({ success: false, error: 'Erreur lors du déplacement.' });
     }
   });
+
+  app.delete('/api/laboratoire/stock/:stockId', authenticateToken, async (req, res) => {
+    try {
+      const stockId = parsePositiveInt(req.params.stockId, 0);
+      if (!stockId) {
+        return res.status(400).json({ success: false, error: 'ID stock invalide.' });
+      }
+      await pool.execute('DELETE FROM stock_labo WHERE id = ?', [stockId]);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Laboratoire delete stock error:', error);
+      res.status(500).json({ success: false, error: 'Erreur lors de la suppression.' });
+    }
+  });
 }
 

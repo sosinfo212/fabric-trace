@@ -40,6 +40,20 @@ export default function LaboratoireStockViewPage() {
       }),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (stockId: number) => laboratoireApi.deleteStockItem(stockId),
+    onSuccess: async () => {
+      toast({ title: 'Produit supprimé du stock.' });
+      await qc.invalidateQueries({ queryKey: ['labo-stock-full'] });
+    },
+    onError: (e: unknown) =>
+      toast({
+        title: 'Erreur',
+        description: e instanceof Error ? e.message : 'Erreur suppression',
+        variant: 'destructive',
+      }),
+  });
+
   if (authLoading || roleLoading) {
     return (
       <DashboardLayout>
@@ -88,6 +102,13 @@ export default function LaboratoireStockViewPage() {
           allStock={stockItems}
           onMove={async (payload) => {
             await moveMutation.mutateAsync(payload);
+            if (activeRack && activeStage) {
+              const res = await laboratoireApi.getStageStock(activeRack.id, activeStage);
+              setStageRows(res.data || []);
+            }
+          }}
+          onDelete={async (stockId) => {
+            await deleteMutation.mutateAsync(stockId);
             if (activeRack && activeStage) {
               const res = await laboratoireApi.getStageStock(activeRack.id, activeStage);
               setStageRows(res.data || []);

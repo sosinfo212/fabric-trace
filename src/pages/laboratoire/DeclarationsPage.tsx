@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { laboratoireApi, type LaboDeclaration, type LaboOrdreWithDeclarations } from '@/lib/api';
 import { toast } from '@/hooks/use-toast';
@@ -68,11 +68,6 @@ export default function LaboratoireDeclarationsPage() {
       await qc.invalidateQueries({ queryKey: ['labo-declarations'] });
     },
   });
-
-  const lastDeclaration = useMemo(
-    () => (selected?.declarations?.[0] ? selected.declarations[0] : null),
-    [selected]
-  );
 
   if (authLoading || roleLoading) {
     return (
@@ -144,24 +139,46 @@ export default function LaboratoireDeclarationsPage() {
           open={openCloseFlow}
           onClose={() => setOpenCloseFlow(false)}
           produit={selected?.produit || ''}
-          qty={selected?.qty || 0}
-          lot={lastDeclaration?.lot || ''}
-          declarationId={lastDeclaration?.id}
+          declarations={selected?.declarations || []}
           racks={racks}
           stockItems={stockItems}
-          onConfirm={async ({ rackId, stage, place, declarationId }) => {
+          onAssignDeclaration={async ({ rackId, stage, place, declaration }) => {
             if (!selected) return;
             await assignMutation.mutateAsync({
               rackId,
               stage,
               place,
               produit: selected.produit,
-              qty: selected.qty,
-              lot: lastDeclaration?.lot || 'N/A',
-              declarationId,
+              qty: declaration.qty,
+              lot: declaration.lot || 'N/A',
+              declarationId: declaration.id,
             });
+            toast({ title: 'Déclaration affectée au stock.' });
+            await qc.invalidateQueries({ queryKey: ['labo-stock-full'] });
+          }}
+          onAssignMerged={async ({ rackId, stage, place, declarations }) => {
+            if (!selected) return;
+            if (!declarations.length) return;
+            const uniqueLots = Array.from(new Set(declarations.map((d) => d.lot).filter(Boolean)));
+            const mergedLotRaw = uniqueLots.join(' + ');
+            const mergedLot = mergedLotRaw.length > 255 ? `${mergedLotRaw.slice(0, 252)}...` : mergedLotRaw;
+            const mergedQty = declarations.reduce((sum, d) => sum + (Number(d.qty) || 0), 0);
+            await assignMutation.mutateAsync({
+              rackId,
+              stage,
+              place,
+              produit: selected.produit,
+              qty: mergedQty,
+              lot: mergedLot || 'N/A',
+              declarationId: undefined,
+            });
+            toast({ title: 'Déclarations fusionnées et affectées au stock.' });
+            await qc.invalidateQueries({ queryKey: ['labo-stock-full'] });
+          }}
+          onCloseOrder={async () => {
+            if (!selected) return;
             await closeMutation.mutateAsync({ id: selected.id });
-            toast({ title: 'Fabrication clôturée et affectée au stock.' });
+            toast({ title: 'Fabrication clôturée et toutes les déclarations sont affectées.' });
             await qc.invalidateQueries({ queryKey: ['labo-declarations'] });
           }}
         />

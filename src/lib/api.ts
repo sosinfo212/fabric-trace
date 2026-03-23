@@ -1851,4 +1851,8 @@ export const laboratoireApi = {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
+  deleteStockItem: (stockId: number) =>
+    apiRequest<{ success: boolean }>(`/laboratoire/stock/${stockId}`, {
+      method: 'DELETE',
+    }),
 };
