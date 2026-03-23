@@ -124,9 +124,17 @@ export default function LaboratoireDeclarationsPage() {
           open={openAdd}
           onClose={() => setOpenAdd(false)}
           produit={selected?.produit || ''}
-          onSubmit={async ({ qty, lot }) => {
+          onSubmit={async ({ qty, lot, dateDebut, dateFin, commentaire }) => {
             if (!selected) return;
-            await addMutation.mutateAsync({ ofId: selected.id, produit: selected.produit, qty, lot });
+            await addMutation.mutateAsync({
+              ofId: selected.id,
+              produit: selected.produit,
+              qty,
+              lot,
+              dateDebut,
+              dateFin,
+              commentaire,
+            });
           }}
         />
 

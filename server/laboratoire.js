@@ -98,7 +98,9 @@ export function registerLaboratoireRoutes(app, pool, authenticateToken) {
       const [rows] = await pool.execute(
         `SELECT
           f.id, f.produit, f.qty, f.instruction, f.statut, f.created_at AS createdAt, f.updated_at AS updatedAt,
-          d.id AS declarationId, d.qty AS declarationQty, d.lot AS declarationLot, d.created_at AS declarationCreatedAt
+          d.id AS declarationId, d.qty AS declarationQty, d.lot AS declarationLot,
+          d.date_debut AS declarationDateDebut, d.date_fin AS declarationDateFin,
+          d.commentaire AS declarationCommentaire, d.created_at AS declarationCreatedAt
          FROM fabrication_labo f
          LEFT JOIN declaration_labo d ON d.of_id = f.id
          ORDER BY f.created_at DESC, d.created_at DESC`
@@ -123,6 +125,9 @@ export function registerLaboratoireRoutes(app, pool, authenticateToken) {
             id: row.declarationId,
             qty: row.declarationQty,
             lot: row.declarationLot,
+            dateDebut: row.declarationDateDebut,
+            dateFin: row.declarationDateFin,
+            commentaire: row.declarationCommentaire,
             createdAt: row.declarationCreatedAt,
             produit: row.produit,
           });
@@ -143,15 +148,21 @@ export function registerLaboratoireRoutes(app, pool, authenticateToken) {
       const produit = String(req.body?.produit || '').trim();
       const qty = parsePositiveInt(req.body?.qty, 0);
       const lot = String(req.body?.lot || '').trim();
+      const dateDebutRaw = req.body?.dateDebut;
+      const dateFinRaw = req.body?.dateFin;
+      const commentaireRaw = req.body?.commentaire;
+      const dateDebut = dateDebutRaw ? String(dateDebutRaw).trim() : null;
+      const dateFin = dateFinRaw ? String(dateFinRaw).trim() : null;
+      const commentaire = commentaireRaw != null ? String(commentaireRaw).trim() : null;
       if (!ofId || !produit || qty <= 0 || !lot) {
         return res.status(400).json({ success: false, error: 'Données de déclaration invalides.' });
       }
 
       await connection.beginTransaction();
       const [result] = await connection.execute(
-        `INSERT INTO declaration_labo (of_id, produit, qty, lot)
-         VALUES (?, ?, ?, ?)`,
-        [ofId, produit, qty, lot]
+        `INSERT INTO declaration_labo (of_id, produit, qty, lot, date_debut, date_fin, commentaire)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [ofId, produit, qty, lot, dateDebut, dateFin, commentaire]
       );
 
       await connection.execute(
@@ -177,7 +188,7 @@ export function registerLaboratoireRoutes(app, pool, authenticateToken) {
       const ofId = parsePositiveInt(req.params.ofId, 0);
       if (!ofId) return res.status(400).json({ success: false, error: 'OF invalide.' });
       const [rows] = await pool.execute(
-        `SELECT id, produit, qty, lot, created_at AS createdAt
+        `SELECT id, produit, qty, lot, date_debut AS dateDebut, date_fin AS dateFin, commentaire, created_at AS createdAt
          FROM declaration_labo
          WHERE of_id = ?
          ORDER BY created_at DESC`,
@@ -194,7 +205,8 @@ export function registerLaboratoireRoutes(app, pool, authenticateToken) {
     try {
       const [rows] = await pool.execute(
         `SELECT
-          d.id, d.of_id AS ofId, d.produit, d.qty, d.lot, d.created_at AS createdAt,
+          d.id, d.of_id AS ofId, d.produit, d.qty, d.lot, d.date_debut AS dateDebut, d.date_fin AS dateFin,
+          d.commentaire, d.created_at AS createdAt,
           f.id AS fabricationId, f.produit AS fabricationProduit, f.qty AS fabricationQty, f.statut AS fabricationStatut
          FROM declaration_labo d
          JOIN fabrication_labo f ON f.id = d.of_id

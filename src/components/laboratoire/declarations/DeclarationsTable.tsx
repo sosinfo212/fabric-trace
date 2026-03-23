@@ -32,21 +32,19 @@ export function DeclarationsTable({
           <Table>
             <TableHeader>
               <TableRow>
-                {['#ID', 'Produit', 'Quantité', 'Instruction', 'N° Lot', 'Statut', 'Action'].map((h) => (
+                {['#ID', 'Produit', 'Quantité', 'Instruction', 'Statut', 'Action'].map((h) => (
                   <TableHead key={h}>{h}</TableHead>
                 ))}
               </TableRow>
             </TableHeader>
             <TableBody>
               {rows.map((row) => {
-                const last = row.declarations[0];
                 return (
                   <TableRow key={row.id}>
                     <TableCell className="font-medium">{row.id}</TableCell>
                     <TableCell>{row.produit}</TableCell>
                     <TableCell>{row.qty}</TableCell>
                     <TableCell className="text-muted-foreground">{row.instruction || '—'}</TableCell>
-                    <TableCell className="font-mono text-sm">{last?.lot || '—'}</TableCell>
                     <TableCell>
                       <StatusBadge statut={row.statut} />
                     </TableCell>

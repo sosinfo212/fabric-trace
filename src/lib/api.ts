@@ -1733,6 +1733,9 @@ export interface LaboDeclaration {
   produit: string;
   qty: number;
   lot: string;
+  dateDebut?: string | null;
+  dateFin?: string | null;
+  commentaire?: string | null;
   createdAt: string;
 }
 
@@ -1796,7 +1799,15 @@ export const laboratoireApi = {
 
   getDeclarations: () =>
     apiRequest<{ success: boolean; data: LaboOrdreWithDeclarations[] }>('/laboratoire/declarations'),
-  createDeclaration: (data: { ofId: number; produit: string; qty: number; lot: string }) =>
+  createDeclaration: (data: {
+    ofId: number;
+    produit: string;
+    qty: number;
+    lot: string;
+    dateDebut?: string | null;
+    dateFin?: string | null;
+    commentaire?: string | null;
+  }) =>
     apiRequest<{ success: boolean; id: number }>('/laboratoire/declarations', {
       method: 'POST',
       body: JSON.stringify(data),
