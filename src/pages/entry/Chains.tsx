@@ -43,7 +43,13 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { TableColumnPicker } from '@/components/ui/table-column-picker';
 import { useToast } from '@/hooks/use-toast';
+import {
+  useTableColumnVisibility,
+  countVisibleTableColumns,
+  type TableColumnDef,
+} from '@/hooks/use-table-column-visibility';
 import { Plus, Pencil, Trash2, Link, Loader2, Users } from 'lucide-react';
 
 interface Profile {
@@ -62,6 +68,14 @@ interface Chaine {
   responsable_qlty?: Profile;
   chef_de_chaine?: Profile;
 }
+
+const CHAINS_TABLE_COLUMNS: TableColumnDef[] = [
+  { id: 'num', label: 'N° Chaîne' },
+  { id: 'responsable', label: 'Responsable Qualité' },
+  { id: 'chef', label: 'Chef de Chaîne' },
+  { id: 'operateurs', label: 'Opérateurs' },
+  { id: 'actions', label: 'Actions', required: true },
+];
 
 export default function ChainsPage() {
   const { user, loading: authLoading } = useAuth();
@@ -84,6 +98,12 @@ export default function ChainsPage() {
   const [formResponsableQlty, setFormResponsableQlty] = useState('');
   const [formChefDeChaine, setFormChefDeChaine] = useState('');
   const [formNbrOperateur, setFormNbrOperateur] = useState('');
+
+  const { isVisible, toggle, reset, optionalColumns, visibility } = useTableColumnVisibility(
+    'entry-chains',
+    CHAINS_TABLE_COLUMNS
+  );
+  const chainsColSpan = countVisibleTableColumns(CHAINS_TABLE_COLUMNS, visibility, 0);
 
   const fetchData = async () => {
     setLoading(true);
@@ -335,14 +355,22 @@ export default function ChainsPage() {
         </div>
 
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Link className="h-5 w-5" />
-              Liste des chaînes
-            </CardTitle>
-            <CardDescription>
-              {chaines.length} chaîne{chaines.length > 1 ? 's' : ''} de production
-            </CardDescription>
+          <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Link className="h-5 w-5" />
+                Liste des chaînes
+              </CardTitle>
+              <CardDescription>
+                {chaines.length} chaîne{chaines.length > 1 ? 's' : ''} de production
+              </CardDescription>
+            </div>
+            <TableColumnPicker
+              optionalColumns={optionalColumns}
+              visibility={visibility}
+              onToggle={toggle}
+              onReset={reset}
+            />
           </CardHeader>
           <CardContent>
             {loading ? (
@@ -353,71 +381,78 @@ export default function ChainsPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>N° Chaîne</TableHead>
-                    <TableHead>Responsable Qualité</TableHead>
-                    <TableHead>Chef de Chaîne</TableHead>
-                    <TableHead>
-                      <div className="flex items-center gap-1">
-                        <Users className="h-4 w-4" />
-                        Opérateurs
-                      </div>
-                    </TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    {isVisible('num') && <TableHead>N° Chaîne</TableHead>}
+                    {isVisible('responsable') && <TableHead>Responsable Qualité</TableHead>}
+                    {isVisible('chef') && <TableHead>Chef de Chaîne</TableHead>}
+                    {isVisible('operateurs') && (
+                      <TableHead>
+                        <div className="flex items-center gap-1">
+                          <Users className="h-4 w-4" />
+                          Opérateurs
+                        </div>
+                      </TableHead>
+                    )}
+                    {isVisible('actions') && <TableHead className="text-right">Actions</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {chaines.map((chaine) => (
                     <TableRow key={chaine.id}>
-                      <TableCell className="font-medium">
-                        Chaîne {chaine.num_chaine}
-                      </TableCell>
-                      <TableCell>
-                        {getProfileDisplayName(chaine.responsable_qlty as Profile)}
-                      </TableCell>
-                      <TableCell>
-                        {getProfileDisplayName(chaine.chef_de_chaine as Profile)}
-                      </TableCell>
-                      <TableCell>{chaine.nbr_operateur}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => openEditDialog(chaine)}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button variant="ghost" size="icon">
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Supprimer la chaîne ?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Cette action est irréversible. La chaîne {chaine.num_chaine} sera définitivement supprimée.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Annuler</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => handleDelete(chaine)}
-                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                >
-                                  Supprimer
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        </div>
-                      </TableCell>
+                      {isVisible('num') && (
+                        <TableCell className="font-medium">Chaîne {chaine.num_chaine}</TableCell>
+                      )}
+                      {isVisible('responsable') && (
+                        <TableCell>{getProfileDisplayName(chaine.responsable_qlty as Profile)}</TableCell>
+                      )}
+                      {isVisible('chef') && (
+                        <TableCell>{getProfileDisplayName(chaine.chef_de_chaine as Profile)}</TableCell>
+                      )}
+                      {isVisible('operateurs') && <TableCell>{chaine.nbr_operateur}</TableCell>}
+                      {isVisible('actions') && (
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => openEditDialog(chaine)}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="ghost" size="icon">
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Supprimer la chaîne ?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Cette action est irréversible. La chaîne {chaine.num_chaine} sera définitivement supprimée.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Annuler</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => handleDelete(chaine)}
+                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                  >
+                                    Supprimer
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                   {chaines.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                      <TableCell
+                        colSpan={Math.max(chainsColSpan, 1)}
+                        className="py-8 text-center text-muted-foreground"
+                      >
                         Aucune chaîne enregistrée
                       </TableCell>
                     </TableRow>

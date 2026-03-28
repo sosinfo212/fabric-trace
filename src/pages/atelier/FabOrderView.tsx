@@ -17,7 +17,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { toast } from '@/hooks/use-toast';
-import { Loader2, ArrowLeft, Pencil, CheckCircle } from 'lucide-react';
+import { Loader2, Pencil, CheckCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -109,10 +109,6 @@ export default function FabOrderViewPage() {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Button variant="ghost" onClick={() => navigate('/atelier/fab-orders')}>
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Retour
-            </Button>
             <h1 className="text-3xl font-bold">Ordre: {order.of_id}</h1>
             <Badge className={STATUS_COLORS[order.statut_of] || 'bg-gray-100'}>
               {order.statut_of}

@@ -1,12 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layouts/DashboardLayout';
-import { Button } from '@/components/ui/button';
 import { packingApi } from '@/lib/api';
 
 export default function PackingShowPage() {
   const { id } = useParams();
-  const navigate = useNavigate();
   const packingListId = Number(id);
   const { data, isLoading } = useQuery({
     queryKey: ['packing-list', packingListId],
@@ -19,9 +17,6 @@ export default function PackingShowPage() {
       <div className="space-y-4 p-4 md:p-6">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold">Détail de la Packing List</h1>
-          <Button variant="outline" onClick={() => navigate('/shipping/packing')}>
-            ← Retour
-          </Button>
         </div>
 
         {isLoading || !data ? (

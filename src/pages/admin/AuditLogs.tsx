@@ -18,6 +18,12 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
+import { TableColumnPicker } from '@/components/ui/table-column-picker';
+import {
+  useTableColumnVisibility,
+  countVisibleTableColumns,
+  type TableColumnDef,
+} from '@/hooks/use-table-column-visibility';
 import {
   Activity, Search, RefreshCw, ChevronLeft, ChevronRight,
   Eye, Loader2, X,
@@ -50,6 +56,16 @@ const ACTION_LABELS: Record<string, string> = {
 
 const PAGE_SIZE = 50;
 
+const AUDIT_LOGS_TABLE_COLUMNS: TableColumnDef[] = [
+  { id: 'created_at', label: 'Date / Heure' },
+  { id: 'user', label: 'Utilisateur' },
+  { id: 'action', label: 'Action' },
+  { id: 'module', label: 'Module' },
+  { id: 'record_id', label: 'ID enregistrement' },
+  { id: 'ip', label: 'Adresse IP' },
+  { id: 'details', label: 'Détails', required: true },
+];
+
 export default function AuditLogsPage() {
   const { user, loading: authLoading } = useAuth();
   const { role, hasMenuAccess, loading: roleLoading } = useUserRole();
@@ -68,6 +84,12 @@ export default function AuditLogsPage() {
   const [tableName, setTableName] = useState('');
   const [dateFrom,  setDateFrom]  = useState('');
   const [dateTo,    setDateTo]    = useState('');
+
+  const { isVisible, toggle, reset, optionalColumns, visibility } = useTableColumnVisibility(
+    'admin-audit-logs',
+    AUDIT_LOGS_TABLE_COLUMNS
+  );
+  const auditColSpan = countVisibleTableColumns(AUDIT_LOGS_TABLE_COLUMNS, visibility, 0);
 
   const fetchLogs = useCallback(async (p = page) => {
     setLoading(true);
@@ -223,14 +245,22 @@ export default function AuditLogsPage() {
 
         {/* Table */}
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Activity className="h-4 w-4" />
-              Logs
-            </CardTitle>
-            <CardDescription>
-              {total} entrée{total !== 1 ? 's' : ''} trouvée{total !== 1 ? 's' : ''}
-            </CardDescription>
+          <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Activity className="h-4 w-4" />
+                Logs
+              </CardTitle>
+              <CardDescription>
+                {total} entrée{total !== 1 ? 's' : ''} trouvée{total !== 1 ? 's' : ''}
+              </CardDescription>
+            </div>
+            <TableColumnPicker
+              optionalColumns={optionalColumns}
+              visibility={visibility}
+              onToggle={toggle}
+              onReset={reset}
+            />
           </CardHeader>
           <CardContent className="p-0">
             {loading ? (
@@ -241,54 +271,63 @@ export default function AuditLogsPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Date / Heure</TableHead>
-                    <TableHead>Utilisateur</TableHead>
-                    <TableHead>Action</TableHead>
-                    <TableHead>Module</TableHead>
-                    <TableHead>ID enregistrement</TableHead>
-                    <TableHead>Adresse IP</TableHead>
-                    <TableHead className="text-right">Détails</TableHead>
+                    {isVisible('created_at') && <TableHead>Date / Heure</TableHead>}
+                    {isVisible('user') && <TableHead>Utilisateur</TableHead>}
+                    {isVisible('action') && <TableHead>Action</TableHead>}
+                    {isVisible('module') && <TableHead>Module</TableHead>}
+                    {isVisible('record_id') && <TableHead>ID enregistrement</TableHead>}
+                    {isVisible('ip') && <TableHead>Adresse IP</TableHead>}
+                    {isVisible('details') && <TableHead className="text-right">Détails</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {logs.map(log => (
+                  {logs.map((log) => (
                     <TableRow key={log.id}>
-                      <TableCell className="whitespace-nowrap text-sm">
-                        {new Date(log.created_at).toLocaleString('fr-FR')}
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {log.user_email ?? <span className="text-muted-foreground italic">Inconnu</span>}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={ACTION_COLORS[log.action] ?? 'outline'}>
-                          {ACTION_LABELS[log.action] ?? log.action}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <code className="rounded bg-muted px-1 py-0.5 text-xs">{log.table_name}</code>
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {log.record_id ?? '-'}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {log.ip_address ?? '-'}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {log.new_data && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setSelectedLog(log)}
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </TableCell>
+                      {isVisible('created_at') && (
+                        <TableCell className="whitespace-nowrap text-sm">
+                          {new Date(log.created_at).toLocaleString('fr-FR')}
+                        </TableCell>
+                      )}
+                      {isVisible('user') && (
+                        <TableCell className="text-sm">
+                          {log.user_email ?? <span className="text-muted-foreground italic">Inconnu</span>}
+                        </TableCell>
+                      )}
+                      {isVisible('action') && (
+                        <TableCell>
+                          <Badge variant={ACTION_COLORS[log.action] ?? 'outline'}>
+                            {ACTION_LABELS[log.action] ?? log.action}
+                          </Badge>
+                        </TableCell>
+                      )}
+                      {isVisible('module') && (
+                        <TableCell>
+                          <code className="rounded bg-muted px-1 py-0.5 text-xs">{log.table_name}</code>
+                        </TableCell>
+                      )}
+                      {isVisible('record_id') && (
+                        <TableCell className="text-sm text-muted-foreground">{log.record_id ?? '-'}</TableCell>
+                      )}
+                      {isVisible('ip') && (
+                        <TableCell className="text-sm text-muted-foreground">{log.ip_address ?? '-'}</TableCell>
+                      )}
+                      {isVisible('details') && (
+                        <TableCell className="text-right">
+                          {log.new_data && (
+                            <Button variant="ghost" size="icon" onClick={() => setSelectedLog(log)}>
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                   {logs.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={7} className="py-12 text-center text-muted-foreground">
+                      <TableCell
+                        colSpan={Math.max(auditColSpan, 1)}
+                        className="py-12 text-center text-muted-foreground"
+                      >
                         Aucune entrée trouvée
                       </TableCell>
                     </TableRow>

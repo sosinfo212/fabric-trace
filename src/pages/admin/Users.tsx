@@ -45,7 +45,13 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { TableColumnPicker } from '@/components/ui/table-column-picker';
 import { useToast } from '@/hooks/use-toast';
+import {
+  useTableColumnVisibility,
+  countVisibleTableColumns,
+  type TableColumnDef,
+} from '@/hooks/use-table-column-visibility';
 import { Plus, Pencil, Trash2, Users, Loader2 } from 'lucide-react';
 import { z } from 'zod';
 
@@ -90,6 +96,14 @@ const ALL_ROLES: AppRole[] = [
   'operator',
 ];
 
+const USERS_TABLE_COLUMNS: TableColumnDef[] = [
+  { id: 'email', label: 'Email' },
+  { id: 'full_name', label: 'Nom' },
+  { id: 'role', label: 'Rôle' },
+  { id: 'created_at', label: 'Date de création' },
+  { id: 'actions', label: 'Actions', required: true },
+];
+
 export default function UsersPage() {
   const { user, loading: authLoading } = useAuth();
   const { role, hasMenuAccess, allowedMenuPaths, loading: roleLoading } = useUserRole();
@@ -114,6 +128,12 @@ export default function UsersPage() {
   const [editFullName, setEditFullName] = useState('');
   const [editPassword, setEditPassword] = useState('');
   const [editRole, setEditRole] = useState<AppRole>('operator');
+
+  const { isVisible, toggle, reset, optionalColumns, visibility } = useTableColumnVisibility(
+    'admin-users',
+    USERS_TABLE_COLUMNS
+  );
+  const usersColSpan = countVisibleTableColumns(USERS_TABLE_COLUMNS, visibility, 0);
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -371,14 +391,22 @@ export default function UsersPage() {
         </div>
 
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5" />
-              Liste des utilisateurs
-            </CardTitle>
-            <CardDescription>
-              {users.length} utilisateur{users.length > 1 ? 's' : ''} enregistré{users.length > 1 ? 's' : ''}
-            </CardDescription>
+          <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="h-5 w-5" />
+                Liste des utilisateurs
+              </CardTitle>
+              <CardDescription>
+                {users.length} utilisateur{users.length > 1 ? 's' : ''} enregistré{users.length > 1 ? 's' : ''}
+              </CardDescription>
+            </div>
+            <TableColumnPicker
+              optionalColumns={optionalColumns}
+              visibility={visibility}
+              onToggle={toggle}
+              onReset={reset}
+            />
           </CardHeader>
           <CardContent>
             {loading ? (
@@ -389,70 +417,77 @@ export default function UsersPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Nom</TableHead>
-                    <TableHead>Rôle</TableHead>
-                    <TableHead>Date de création</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    {isVisible('email') && <TableHead>Email</TableHead>}
+                    {isVisible('full_name') && <TableHead>Nom</TableHead>}
+                    {isVisible('role') && <TableHead>Rôle</TableHead>}
+                    {isVisible('created_at') && <TableHead>Date de création</TableHead>}
+                    {isVisible('actions') && <TableHead className="text-right">Actions</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {users.map((u) => (
                     <TableRow key={u.id}>
-                      <TableCell className="font-medium">{u.email}</TableCell>
-                      <TableCell>{u.full_name || '-'}</TableCell>
-                      <TableCell>
-                        <Badge variant={u.role === 'admin' ? 'default' : 'secondary'}>
-                          {u.role ? ROLE_LABELS[u.role] : 'Non défini'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {new Date(u.created_at).toLocaleDateString('fr-FR')}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => openEditDialog(u)}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                disabled={u.id === user?.id}
-                              >
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Supprimer l'utilisateur ?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Cette action est irréversible. L'utilisateur {u.email} sera définitivement supprimé.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Annuler</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => handleDeleteUser(u.id)}
-                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      {isVisible('email') && <TableCell className="font-medium">{u.email}</TableCell>}
+                      {isVisible('full_name') && <TableCell>{u.full_name || '-'}</TableCell>}
+                      {isVisible('role') && (
+                        <TableCell>
+                          <Badge variant={u.role === 'admin' ? 'default' : 'secondary'}>
+                            {u.role ? ROLE_LABELS[u.role] : 'Non défini'}
+                          </Badge>
+                        </TableCell>
+                      )}
+                      {isVisible('created_at') && (
+                        <TableCell>{new Date(u.created_at).toLocaleDateString('fr-FR')}</TableCell>
+                      )}
+                      {isVisible('actions') && (
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => openEditDialog(u)}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  disabled={u.id === user?.id}
                                 >
-                                  Supprimer
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        </div>
-                      </TableCell>
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Supprimer l'utilisateur ?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Cette action est irréversible. L'utilisateur {u.email} sera définitivement supprimé.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Annuler</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => handleDeleteUser(u.id)}
+                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                  >
+                                    Supprimer
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                   {users.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                      <TableCell
+                        colSpan={Math.max(usersColSpan, 1)}
+                        className="text-center py-8 text-muted-foreground"
+                      >
                         Aucun utilisateur trouvé
                       </TableCell>
                     </TableRow>

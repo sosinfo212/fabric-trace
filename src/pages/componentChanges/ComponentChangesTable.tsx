@@ -31,6 +31,27 @@ import {
 import { MoreVertical, Check, Pencil, Trash2 } from 'lucide-react';
 import { componentChangesApi, type ComponentChangeWithProducts } from '@/lib/api';
 import { toast } from '@/components/ui/sonner';
+import { TableColumnPicker } from '@/components/ui/table-column-picker';
+import {
+  useTableColumnVisibility,
+  countVisibleTableColumns,
+  type TableColumnDef,
+} from '@/hooks/use-table-column-visibility';
+
+const COMPONENT_CHANGES_COLUMNS: TableColumnDef[] = [
+  { id: 'of', label: 'OF' },
+  { id: 'commande', label: 'Commande' },
+  { id: 'nom_produit', label: 'Nom du Produit' },
+  { id: 'orig_name', label: 'Composant Original' },
+  { id: 'orig_ref', label: 'Référence Original' },
+  { id: 'new_name', label: 'Nouveau Composant' },
+  { id: 'new_ref', label: 'Nouvelle Référence' },
+  { id: 'qty', label: 'Quantité' },
+  { id: 'statut', label: 'Statut' },
+  { id: 'comment', label: 'Commentaire' },
+  { id: 'date', label: 'Date' },
+  { id: 'actions', label: 'Actions', required: true },
+];
 
 interface ComponentChangesTableProps {
   data: ComponentChangeWithProducts[];
@@ -41,6 +62,12 @@ interface ComponentChangesTableProps {
 export function ComponentChangesTable({ data, onRefresh, onEdit }: ComponentChangesTableProps) {
   const [optimisticStatus, setOptimisticStatus] = useState<Record<number, string>>({});
   const [deleteId, setDeleteId] = useState<number | null>(null);
+
+  const { isVisible, toggle, reset, optionalColumns, visibility } = useTableColumnVisibility(
+    'component-changes',
+    COMPONENT_CHANGES_COLUMNS
+  );
+  const ccColSpan = countVisibleTableColumns(COMPONENT_CHANGES_COLUMNS, visibility, 0);
 
   const getStatus = (row: ComponentChangeWithProducts) => optimisticStatus[row.id] ?? row.status ?? null;
 
@@ -83,28 +110,39 @@ export function ComponentChangesTable({ data, onRefresh, onEdit }: ComponentChan
 
   return (
     <>
+      <div className="mb-2 flex justify-end">
+        <TableColumnPicker
+          optionalColumns={optionalColumns}
+          visibility={visibility}
+          onToggle={toggle}
+          onReset={reset}
+        />
+      </div>
       <div className="overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>OF</TableHead>
-              <TableHead>Commande</TableHead>
-              <TableHead>Nom du Produit</TableHead>
-              <TableHead>Composant Original</TableHead>
-              <TableHead>Référence Original</TableHead>
-              <TableHead>Nouveau Composant</TableHead>
-              <TableHead>Nouvelle Référence</TableHead>
-              <TableHead>Quantité</TableHead>
-              <TableHead>Statut</TableHead>
-              <TableHead>Commentaire</TableHead>
-              <TableHead>Date</TableHead>
-              <TableHead className="text-right w-[100px]">Actions</TableHead>
+              {isVisible('of') && <TableHead>OF</TableHead>}
+              {isVisible('commande') && <TableHead>Commande</TableHead>}
+              {isVisible('nom_produit') && <TableHead>Nom du Produit</TableHead>}
+              {isVisible('orig_name') && <TableHead>Composant Original</TableHead>}
+              {isVisible('orig_ref') && <TableHead>Référence Original</TableHead>}
+              {isVisible('new_name') && <TableHead>Nouveau Composant</TableHead>}
+              {isVisible('new_ref') && <TableHead>Nouvelle Référence</TableHead>}
+              {isVisible('qty') && <TableHead>Quantité</TableHead>}
+              {isVisible('statut') && <TableHead>Statut</TableHead>}
+              {isVisible('comment') && <TableHead>Commentaire</TableHead>}
+              {isVisible('date') && <TableHead>Date</TableHead>}
+              {isVisible('actions') && <TableHead className="w-[100px] text-right">Actions</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
             {data.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={12} className="text-center text-muted-foreground py-8">
+                <TableCell
+                  colSpan={Math.max(ccColSpan, 1)}
+                  className="py-8 text-center text-muted-foreground"
+                >
                   Aucun changement de composant.
                 </TableCell>
               </TableRow>
@@ -113,47 +151,51 @@ export function ComponentChangesTable({ data, onRefresh, onEdit }: ComponentChan
                 const status = getStatus(row);
                 return (
                   <TableRow key={row.id}>
-                    <TableCell className="font-medium">{row.ofId}</TableCell>
-                    <TableCell>{row.commande}</TableCell>
-                    <TableCell>{row.nomDuProduit}</TableCell>
-                    <TableCell>{row.originalComponentName}</TableCell>
-                    <TableCell>{row.originalComponentCode}</TableCell>
-                    <TableCell>{row.newComponentName}</TableCell>
-                    <TableCell>{row.newComponentCode}</TableCell>
-                    <TableCell>{row.qty}</TableCell>
-                    <TableCell>{status ?? '—'}</TableCell>
-                    <TableCell className="max-w-[200px] truncate">{row.comment ?? '—'}</TableCell>
-                    <TableCell>{formatDate(row.createdAt)}</TableCell>
-                    <TableCell className="text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            onClick={() => handleValidate(row.id)}
-                            disabled={!!status}
-                            className={status ? 'opacity-50 cursor-not-allowed' : ''}
-                          >
-                            <Check className="mr-2 h-4 w-4" />
-                            Valider
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => onEdit(row)}>
-                            <Pencil className="mr-2 h-4 w-4" />
-                            Modifier
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => setDeleteId(row.id)}
-                            className="text-destructive focus:text-destructive"
-                          >
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            Supprimer
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
+                    {isVisible('of') && <TableCell className="font-medium">{row.ofId}</TableCell>}
+                    {isVisible('commande') && <TableCell>{row.commande}</TableCell>}
+                    {isVisible('nom_produit') && <TableCell>{row.nomDuProduit}</TableCell>}
+                    {isVisible('orig_name') && <TableCell>{row.originalComponentName}</TableCell>}
+                    {isVisible('orig_ref') && <TableCell>{row.originalComponentCode}</TableCell>}
+                    {isVisible('new_name') && <TableCell>{row.newComponentName}</TableCell>}
+                    {isVisible('new_ref') && <TableCell>{row.newComponentCode}</TableCell>}
+                    {isVisible('qty') && <TableCell>{row.qty}</TableCell>}
+                    {isVisible('statut') && <TableCell>{status ?? '—'}</TableCell>}
+                    {isVisible('comment') && (
+                      <TableCell className="max-w-[200px] truncate">{row.comment ?? '—'}</TableCell>
+                    )}
+                    {isVisible('date') && <TableCell>{formatDate(row.createdAt)}</TableCell>}
+                    {isVisible('actions') && (
+                      <TableCell className="text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              onClick={() => handleValidate(row.id)}
+                              disabled={!!status}
+                              className={status ? 'cursor-not-allowed opacity-50' : ''}
+                            >
+                              <Check className="mr-2 h-4 w-4" />
+                              Valider
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => onEdit(row)}>
+                              <Pencil className="mr-2 h-4 w-4" />
+                              Modifier
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => setDeleteId(row.id)}
+                              className="text-destructive focus:text-destructive"
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Supprimer
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    )}
                   </TableRow>
                 );
               })

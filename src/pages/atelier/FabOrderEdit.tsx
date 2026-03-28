@@ -31,7 +31,7 @@ import { SearchableCombobox, ComboboxOption } from '@/components/ui/searchable-c
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { toast } from '@/hooks/use-toast';
-import { Loader2, ArrowLeft, CalendarIcon } from 'lucide-react';
+import { Loader2, CalendarIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -317,10 +317,6 @@ export default function FabOrderEditPage() {
     <DashboardLayout>
       <div className="space-y-6">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" onClick={() => navigate('/atelier/fab-orders')}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Retour
-          </Button>
           <h1 className="text-3xl font-bold">Modifier l'Ordre: {order.of_id}</h1>
         </div>
 

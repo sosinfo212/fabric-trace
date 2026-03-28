@@ -1,11 +1,10 @@
-import { useParams, useNavigate, Navigate } from 'react-router-dom';
+import { useParams, Navigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { fabricationApi } from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { DashboardLayout } from '@/components/layouts/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import {
   Table,
   TableBody,
@@ -14,13 +13,12 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Loader2, ArrowLeft } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
 export default function DeclarationHistoryPage() {
   const { ofId } = useParams<{ ofId: string }>();
-  const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
   const { loading: roleLoading, hasMenuAccess } = useUserRole();
 
@@ -58,9 +56,6 @@ export default function DeclarationHistoryPage() {
     <DashboardLayout>
       <div className="space-y-6">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/workshop/declaration')}>
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
           <div>
             <h1 className="text-3xl font-bold">Historique fabrication</h1>
             <p className="text-muted-foreground">OF: {ofId}</p>

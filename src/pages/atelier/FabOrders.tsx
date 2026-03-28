@@ -55,8 +55,32 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { TableColumnPicker } from '@/components/ui/table-column-picker';
+import {
+  useTableColumnVisibility,
+  countVisibleTableColumns,
+  type TableColumnDef,
+} from '@/hooks/use-table-column-visibility';
 
 const STATUS_OPTIONS = ['Planifié', 'En cours', 'Réalisé', 'Cloturé', 'Suspendu'] as const;
+
+const FAB_ORDERS_TABLE_COLUMNS: TableColumnDef[] = [
+  { id: 'client', label: 'Client' },
+  { id: 'sale_order', label: 'N° Commande' },
+  { id: 'of_id', label: 'OF ID' },
+  { id: 'product', label: 'Produit' },
+  { id: 'reference', label: 'Référence' },
+  { id: 'chaine', label: 'Chaîne' },
+  { id: 'chef_qlty', label: 'Chef qualité' },
+  { id: 'priorite', label: 'Priorité' },
+  { id: 'date_fab', label: 'Date Fab.' },
+  { id: 'pf_qty', label: 'PF Qty' },
+  { id: 'tester_qty', label: 'Tester' },
+  { id: 'set_qty', label: 'Set' },
+  { id: 'total', label: 'Total' },
+  { id: 'statut', label: 'Statut' },
+  { id: 'actions', label: 'Actions', required: true },
+];
 
 // Priority Input Component for inline editing
 function PriorityInput({ value, onChange, disabled }: { value: string; onChange: (value: string) => void; disabled: boolean }) {
@@ -136,6 +160,17 @@ export default function FabOrdersPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false);
+
+  const { isVisible, toggle, reset, optionalColumns, visibility } = useTableColumnVisibility(
+    'atelier-fab-orders',
+    FAB_ORDERS_TABLE_COLUMNS
+  );
+  const fabOrdersLeadingCount = isAdmin ? 1 : 0;
+  const fabColSpan = countVisibleTableColumns(
+    FAB_ORDERS_TABLE_COLUMNS,
+    visibility,
+    fabOrdersLeadingCount
+  );
 
   const canAccess = hasMenuAccess('/atelier/fab-orders');
 
@@ -412,17 +447,25 @@ export default function FabOrdersPage() {
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
+          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle>Liste des Ordres ({fabOrders?.length || 0})</CardTitle>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => refetch()}
-              disabled={isRefetching}
-              aria-label="Actualiser la liste"
-            >
-              <RefreshCw className={`h-4 w-4 ${isRefetching ? 'animate-spin' : ''}`} />
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <TableColumnPicker
+                optionalColumns={optionalColumns}
+                visibility={visibility}
+                onToggle={toggle}
+                onReset={reset}
+              />
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => refetch()}
+                disabled={isRefetching}
+                aria-label="Actualiser la liste"
+              >
+                <RefreshCw className={`h-4 w-4 ${isRefetching ? 'animate-spin' : ''}`} />
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -443,27 +486,30 @@ export default function FabOrdersPage() {
                           />
                         </TableHead>
                       )}
-                      <TableHead>Client</TableHead>
-                      <TableHead>N° Commande</TableHead>
-                      <TableHead>OF ID</TableHead>
-                      <TableHead>Produit</TableHead>
-                      <TableHead>Référence</TableHead>
-                      <TableHead>Chaîne</TableHead>
-                      <TableHead>Chef qualité</TableHead>
-                      <TableHead>Priorité</TableHead>
-                      <TableHead>Date Fab.</TableHead>
-                      <TableHead className="text-right">PF Qty</TableHead>
-                      <TableHead className="text-right">Tester</TableHead>
-                      <TableHead className="text-right">Set</TableHead>
-                      <TableHead className="text-right">Total</TableHead>
-                      <TableHead>Statut</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
+                      {isVisible('client') && <TableHead>Client</TableHead>}
+                      {isVisible('sale_order') && <TableHead>N° Commande</TableHead>}
+                      {isVisible('of_id') && <TableHead>OF ID</TableHead>}
+                      {isVisible('product') && <TableHead>Produit</TableHead>}
+                      {isVisible('reference') && <TableHead>Référence</TableHead>}
+                      {isVisible('chaine') && <TableHead>Chaîne</TableHead>}
+                      {isVisible('chef_qlty') && <TableHead>Chef qualité</TableHead>}
+                      {isVisible('priorite') && <TableHead>Priorité</TableHead>}
+                      {isVisible('date_fab') && <TableHead>Date Fab.</TableHead>}
+                      {isVisible('pf_qty') && <TableHead className="text-right">PF Qty</TableHead>}
+                      {isVisible('tester_qty') && <TableHead className="text-right">Tester</TableHead>}
+                      {isVisible('set_qty') && <TableHead className="text-right">Set</TableHead>}
+                      {isVisible('total') && <TableHead className="text-right">Total</TableHead>}
+                      {isVisible('statut') && <TableHead>Statut</TableHead>}
+                      {isVisible('actions') && <TableHead className="text-right">Actions</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {fabOrders?.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={isAdmin ? 16 : 15} className="text-center text-muted-foreground">
+                        <TableCell
+                          colSpan={Math.max(fabColSpan, 1)}
+                          className="text-center text-muted-foreground"
+                        >
                           Aucun ordre de fabrication trouvé
                         </TableCell>
                       </TableRow>
@@ -479,70 +525,85 @@ export default function FabOrdersPage() {
                               />
                             </TableCell>
                           )}
-                          <TableCell>{order.client_id || '-'}</TableCell>
-                          <TableCell>{order.sale_order_id}</TableCell>
-                          <TableCell className="font-mono">{order.of_id}</TableCell>
-                          <TableCell>{order.prod_name || '-'}</TableCell>
-                          <TableCell>{order.prod_ref || '-'}</TableCell>
-                          <TableCell>
-                            {canAccess ? (
-                              <Select
-                                value={order.chaine_id}
-                                onValueChange={(value) => chaineMutation.mutate({ id: order.id, chaine_id: value })}
-                                disabled={chaineMutation.isPending}
-                              >
-                                <SelectTrigger className="w-[140px]">
-                                  <SelectValue>
-                                    {order.chaines?.num_chaine ? `Chaîne ${order.chaines.num_chaine}` : 'Sélectionner'}
-                                  </SelectValue>
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {chaines?.map((chaine) => (
-                                    <SelectItem key={chaine.id} value={chaine.id}>
-                                      Chaîne {chaine.num_chaine}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            ) : (
-                              order.chaines?.num_chaine ? `Chaîne ${order.chaines.num_chaine}` : '-'
-                            )}
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">
-                            {order.chaines?.responsable_qlty_name || '-'}
-                          </TableCell>
-                          <TableCell>
-                            {canAccess ? (
-                              <PriorityInput
-                                value={order.order_prod || ''}
-                                onChange={(value) => {
-                                  const trimmedValue = value.trim() || null;
-                                  if (trimmedValue !== (order.order_prod || null)) {
-                                    priorityMutation.mutate({ id: order.id, order_prod: trimmedValue });
-                                  }
-                                }}
-                                disabled={priorityMutation.isPending}
-                              />
-                            ) : (
-                              <span>{order.order_prod || '-'}</span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {order.date_fabrication
-                              ? format(new Date(order.date_fabrication), 'dd/MM/yyyy', { locale: fr })
-                              : '-'}
-                          </TableCell>
-                          <TableCell className="text-right">{order.pf_qty}</TableCell>
-                          <TableCell className="text-right">{order.tester_qty}</TableCell>
-                          <TableCell className="text-right">{order.set_qty}</TableCell>
-                          <TableCell className="text-right font-semibold">
-                            {order.pf_qty + order.tester_qty + order.set_qty}
-                          </TableCell>
-                          <TableCell>
-                            <Badge className={STATUS_COLORS[order.statut_of] || 'bg-gray-100'}>
-                              {order.statut_of}
-                            </Badge>
-                          </TableCell>
+                          {isVisible('client') && <TableCell>{order.client_id || '-'}</TableCell>}
+                          {isVisible('sale_order') && <TableCell>{order.sale_order_id}</TableCell>}
+                          {isVisible('of_id') && <TableCell className="font-mono">{order.of_id}</TableCell>}
+                          {isVisible('product') && <TableCell>{order.prod_name || '-'}</TableCell>}
+                          {isVisible('reference') && <TableCell>{order.prod_ref || '-'}</TableCell>}
+                          {isVisible('chaine') && (
+                            <TableCell>
+                              {canAccess ? (
+                                <Select
+                                  value={order.chaine_id}
+                                  onValueChange={(value) => chaineMutation.mutate({ id: order.id, chaine_id: value })}
+                                  disabled={chaineMutation.isPending}
+                                >
+                                  <SelectTrigger className="w-[140px]">
+                                    <SelectValue>
+                                      {order.chaines?.num_chaine ? `Chaîne ${order.chaines.num_chaine}` : 'Sélectionner'}
+                                    </SelectValue>
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {chaines?.map((chaine) => (
+                                      <SelectItem key={chaine.id} value={chaine.id}>
+                                        Chaîne {chaine.num_chaine}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              ) : (
+                                order.chaines?.num_chaine ? `Chaîne ${order.chaines.num_chaine}` : '-'
+                              )}
+                            </TableCell>
+                          )}
+                          {isVisible('chef_qlty') && (
+                            <TableCell className="text-muted-foreground">
+                              {order.chaines?.responsable_qlty_name || '-'}
+                            </TableCell>
+                          )}
+                          {isVisible('priorite') && (
+                            <TableCell>
+                              {canAccess ? (
+                                <PriorityInput
+                                  value={order.order_prod || ''}
+                                  onChange={(value) => {
+                                    const trimmedValue = value.trim() || null;
+                                    if (trimmedValue !== (order.order_prod || null)) {
+                                      priorityMutation.mutate({ id: order.id, order_prod: trimmedValue });
+                                    }
+                                  }}
+                                  disabled={priorityMutation.isPending}
+                                />
+                              ) : (
+                                <span>{order.order_prod || '-'}</span>
+                              )}
+                            </TableCell>
+                          )}
+                          {isVisible('date_fab') && (
+                            <TableCell>
+                              {order.date_fabrication
+                                ? format(new Date(order.date_fabrication), 'dd/MM/yyyy', { locale: fr })
+                                : '-'}
+                            </TableCell>
+                          )}
+                          {isVisible('pf_qty') && <TableCell className="text-right">{order.pf_qty}</TableCell>}
+                          {isVisible('tester_qty') && (
+                            <TableCell className="text-right">{order.tester_qty}</TableCell>
+                          )}
+                          {isVisible('set_qty') && <TableCell className="text-right">{order.set_qty}</TableCell>}
+                          {isVisible('total') && (
+                            <TableCell className="text-right font-semibold">
+                              {order.pf_qty + order.tester_qty + order.set_qty}
+                            </TableCell>
+                          )}
+                          {isVisible('statut') && (
+                            <TableCell>
+                              <Badge className={STATUS_COLORS[order.statut_of] || 'bg-gray-100'}>
+                                {order.statut_of}
+                              </Badge>
+                            </TableCell>
+                          )}
+                          {isVisible('actions') && (
                           <TableCell className="text-right">
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
@@ -583,6 +644,7 @@ export default function FabOrdersPage() {
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </TableCell>
+                          )}
                         </TableRow>
                       ))
                     )}

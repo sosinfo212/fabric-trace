@@ -11,6 +11,12 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { TableColumnPicker } from '@/components/ui/table-column-picker';
+import {
+  useTableColumnVisibility,
+  countVisibleTableColumns,
+  type TableColumnDef,
+} from '@/hooks/use-table-column-visibility';
 import {
   Table,
   TableBody,
@@ -52,6 +58,15 @@ interface CustomRole {
   user_count?: number;
 }
 
+const ROLES_TABLE_COLUMNS: TableColumnDef[] = [
+  { id: 'label', label: 'Libellé' },
+  { id: 'name', label: 'Identifiant' },
+  { id: 'description', label: 'Description' },
+  { id: 'type', label: 'Type' },
+  { id: 'users', label: 'Utilisateurs' },
+  { id: 'actions', label: 'Actions', required: true },
+];
+
 export default function RolesPage() {
   const { user, loading: authLoading } = useAuth();
   const { role, hasMenuAccess, allowedMenuPaths, loading: roleLoading } = useUserRole();
@@ -69,6 +84,12 @@ export default function RolesPage() {
   const [formName, setFormName] = useState('');
   const [formLabel, setFormLabel] = useState('');
   const [formDescription, setFormDescription] = useState('');
+
+  const { isVisible, toggle, reset, optionalColumns, visibility } = useTableColumnVisibility(
+    'admin-roles',
+    ROLES_TABLE_COLUMNS
+  );
+  const rolesColSpan = countVisibleTableColumns(ROLES_TABLE_COLUMNS, visibility, 0);
 
   const fetchRoles = async () => {
     setLoading(true);
@@ -355,14 +376,20 @@ export default function RolesPage() {
         </div>
 
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Shield className="h-5 w-5" />
-              Liste des Rôles
-            </CardTitle>
-            <CardDescription>
-              Rôles système et personnalisés
-            </CardDescription>
+          <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Shield className="h-5 w-5" />
+                Liste des Rôles
+              </CardTitle>
+              <CardDescription>Rôles système et personnalisés</CardDescription>
+            </div>
+            <TableColumnPicker
+              optionalColumns={optionalColumns}
+              visibility={visibility}
+              onToggle={toggle}
+              onReset={reset}
+            />
           </CardHeader>
           <CardContent>
             {loading ? (
@@ -373,80 +400,96 @@ export default function RolesPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Libellé</TableHead>
-                    <TableHead>Identifiant</TableHead>
-                    <TableHead>Description</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Utilisateurs</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    {isVisible('label') && <TableHead>Libellé</TableHead>}
+                    {isVisible('name') && <TableHead>Identifiant</TableHead>}
+                    {isVisible('description') && <TableHead>Description</TableHead>}
+                    {isVisible('type') && <TableHead>Type</TableHead>}
+                    {isVisible('users') && <TableHead>Utilisateurs</TableHead>}
+                    {isVisible('actions') && <TableHead className="text-right">Actions</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {roles.map((r) => (
                     <TableRow key={r.id}>
-                      <TableCell className="font-medium">{r.label}</TableCell>
-                      <TableCell>
-                        <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
-                          {r.name}
-                        </code>
-                      </TableCell>
-                      <TableCell className="max-w-xs truncate text-muted-foreground">
-                        {r.description || '-'}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={r.is_system ? 'default' : 'secondary'}>
-                          {r.is_system ? 'Système' : 'Personnalisé'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{r.user_count || 0}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => openEditDialog(r)}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          {!r.is_system && (
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  disabled={r.user_count && r.user_count > 0}
-                                >
-                                  <Trash2 className="h-4 w-4 text-destructive" />
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Supprimer le rôle ?</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Cette action est irréversible. Le rôle "{r.label}" sera définitivement supprimé.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Annuler</AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={() => handleDelete(r)}
-                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                  >
-                                    Supprimer
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          )}
-                          {r.is_system && (
-                            <Button variant="ghost" size="icon" disabled>
-                              <Lock className="h-4 w-4 text-muted-foreground" />
+                      {isVisible('label') && <TableCell className="font-medium">{r.label}</TableCell>}
+                      {isVisible('name') && (
+                        <TableCell>
+                          <code className="text-xs bg-muted px-1.5 py-0.5 rounded">{r.name}</code>
+                        </TableCell>
+                      )}
+                      {isVisible('description') && (
+                        <TableCell className="max-w-xs truncate text-muted-foreground">
+                          {r.description || '-'}
+                        </TableCell>
+                      )}
+                      {isVisible('type') && (
+                        <TableCell>
+                          <Badge variant={r.is_system ? 'default' : 'secondary'}>
+                            {r.is_system ? 'Système' : 'Personnalisé'}
+                          </Badge>
+                        </TableCell>
+                      )}
+                      {isVisible('users') && <TableCell>{r.user_count || 0}</TableCell>}
+                      {isVisible('actions') && (
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => openEditDialog(r)}
+                            >
+                              <Pencil className="h-4 w-4" />
                             </Button>
-                          )}
-                        </div>
-                      </TableCell>
+                            {!r.is_system && (
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    disabled={r.user_count && r.user_count > 0}
+                                  >
+                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Supprimer le rôle ?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Cette action est irréversible. Le rôle "{r.label}" sera définitivement supprimé.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Annuler</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() => handleDelete(r)}
+                                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                    >
+                                      Supprimer
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            )}
+                            {r.is_system && (
+                              <Button variant="ghost" size="icon" disabled>
+                                <Lock className="h-4 w-4 text-muted-foreground" />
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
+                  {roles.length === 0 && (
+                    <TableRow>
+                      <TableCell
+                        colSpan={Math.max(rolesColSpan, 1)}
+                        className="py-8 text-center text-muted-foreground"
+                      >
+                        Aucun rôle
+                      </TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
             )}

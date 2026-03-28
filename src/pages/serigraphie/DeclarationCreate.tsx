@@ -25,7 +25,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { ArrowLeft, Loader2, Plus, Trash2 } from 'lucide-react';
+import { Loader2, Plus, Trash2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
 const STATUT_OPTIONS = ['Planifié', 'En cours', 'Réalisé', 'Suspendu', 'Cloturé'];
@@ -196,9 +196,6 @@ export default function SerigraphieDeclarationCreatePage() {
       <div className="space-y-6 p-4 md:p-6">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={() => navigate('/serigraphie/declaration')} aria-label="Retour">
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
             <div>
               <h1 className="text-2xl font-bold tracking-tight">Déclaration de production OF: {ofid}</h1>
               <p className="text-sm text-muted-foreground">Renseignez les champs puis enregistrez.</p>

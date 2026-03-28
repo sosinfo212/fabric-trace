@@ -37,7 +37,13 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { TableColumnPicker } from '@/components/ui/table-column-picker';
 import { useToast } from '@/hooks/use-toast';
+import {
+  useTableColumnVisibility,
+  countVisibleTableColumns,
+  type TableColumnDef,
+} from '@/hooks/use-table-column-visibility';
 import { Plus, Pencil, Trash2, Users, Loader2, Search } from 'lucide-react';
 import { z } from 'zod';
 
@@ -58,6 +64,14 @@ const clientSchema = z.object({
   instruction_logistique: z.string().max(2000).optional(),
 });
 
+const CLIENTS_TABLE_COLUMNS: TableColumnDef[] = [
+  { id: 'name', label: 'Nom' },
+  { id: 'designation', label: 'Désignation' },
+  { id: 'instruction', label: 'Instructions' },
+  { id: 'instruction_logistique', label: 'Instructions logistiques' },
+  { id: 'actions', label: 'Actions', required: true },
+];
+
 export default function ClientsPage() {
   const { user, loading: authLoading } = useAuth();
   const { role, hasMenuAccess, allowedMenuPaths, loading: roleLoading } = useUserRole();
@@ -71,6 +85,12 @@ export default function ClientsPage() {
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+
+  const { isVisible, toggle, reset, optionalColumns, visibility } = useTableColumnVisibility(
+    'entry-clients',
+    CLIENTS_TABLE_COLUMNS
+  );
+  const clientsColSpan = countVisibleTableColumns(CLIENTS_TABLE_COLUMNS, visibility, 0);
 
   // Form state
   const [formName, setFormName] = useState('');
@@ -336,7 +356,7 @@ export default function ClientsPage() {
 
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div>
                 <CardTitle className="flex items-center gap-2">
                   <Users className="h-5 w-5" />
@@ -346,14 +366,22 @@ export default function ClientsPage() {
                   {filteredClients.length} client{filteredClients.length > 1 ? 's' : ''}
                 </CardDescription>
               </div>
-              <div className="relative w-64">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  placeholder="Rechercher..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9"
+              <div className="flex flex-wrap items-center gap-2">
+                <TableColumnPicker
+                  optionalColumns={optionalColumns}
+                  visibility={visibility}
+                  onToggle={toggle}
+                  onReset={reset}
                 />
+                <div className="relative w-full min-w-[200px] sm:w-64">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    placeholder="Rechercher..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
               </div>
             </div>
           </CardHeader>
@@ -366,64 +394,73 @@ export default function ClientsPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Nom</TableHead>
-                    <TableHead>Désignation</TableHead>
-                    <TableHead>Instructions</TableHead>
-                    <TableHead>Instructions logistiques</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    {isVisible('name') && <TableHead>Nom</TableHead>}
+                    {isVisible('designation') && <TableHead>Désignation</TableHead>}
+                    {isVisible('instruction') && <TableHead>Instructions</TableHead>}
+                    {isVisible('instruction_logistique') && (
+                      <TableHead>Instructions logistiques</TableHead>
+                    )}
+                    {isVisible('actions') && <TableHead className="text-right">Actions</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredClients.map((client) => (
                     <TableRow key={client.id}>
-                      <TableCell className="font-medium">{client.name}</TableCell>
-                      <TableCell>{client.designation || '-'}</TableCell>
-                      <TableCell className="max-w-xs truncate">
-                        {client.instruction || '-'}
-                      </TableCell>
-                      <TableCell className="max-w-xs truncate">
-                        {client.instruction_logistique || '-'}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => openEditDialog(client)}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button variant="ghost" size="icon">
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Supprimer le client ?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Cette action est irréversible. Le client "{client.name}" sera définitivement supprimé.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Annuler</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => handleDelete(client)}
-                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                >
-                                  Supprimer
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        </div>
-                      </TableCell>
+                      {isVisible('name') && <TableCell className="font-medium">{client.name}</TableCell>}
+                      {isVisible('designation') && <TableCell>{client.designation || '-'}</TableCell>}
+                      {isVisible('instruction') && (
+                        <TableCell className="max-w-xs truncate">{client.instruction || '-'}</TableCell>
+                      )}
+                      {isVisible('instruction_logistique') && (
+                        <TableCell className="max-w-xs truncate">
+                          {client.instruction_logistique || '-'}
+                        </TableCell>
+                      )}
+                      {isVisible('actions') && (
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => openEditDialog(client)}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="ghost" size="icon">
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Supprimer le client ?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Cette action est irréversible. Le client "{client.name}" sera définitivement supprimé.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Annuler</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => handleDelete(client)}
+                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                  >
+                                    Supprimer
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                   {filteredClients.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                      <TableCell
+                        colSpan={Math.max(clientsColSpan, 1)}
+                        className="py-8 text-center text-muted-foreground"
+                      >
                         {searchQuery ? 'Aucun client trouvé' : 'Aucun client enregistré'}
                       </TableCell>
                     </TableRow>

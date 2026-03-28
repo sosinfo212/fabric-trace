@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { packingApi } from '@/lib/api';
+import { resolveBackPath } from '@/lib/resolveBackPath';
 
 /** Header image for print/PDF (browser print). */
 const PACKING_PRINT_HEADER_IMAGE = 'https://i.imgur.com/aAhVAkV.png';
@@ -98,6 +100,9 @@ function printIframeWhenImagesReady(iframe: HTMLIFrameElement): void {
 
 export default function PackingPrintPage() {
   const { id } = useParams();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const backTarget = resolveBackPath(location.pathname);
   const packingListId = Number(id);
   const { data, isLoading } = useQuery({
     queryKey: ['packing-print', packingListId],
@@ -194,8 +199,14 @@ export default function PackingPrintPage() {
           object-position: left top;
         }
       `}</style>
-      <div className="no-print flex justify-end">
-        <Button type="button" onClick={handlePrint}>Imprimer</Button>
+      <div className="no-print flex flex-wrap items-center justify-between gap-2">
+        <Button type="button" variant="ghost" onClick={() => navigate(backTarget)}>
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Retour
+        </Button>
+        <Button type="button" onClick={handlePrint}>
+          Imprimer
+        </Button>
       </div>
       <div className="mb-4 print:mb-3">
         <img
