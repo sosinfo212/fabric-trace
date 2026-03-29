@@ -3,6 +3,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { Navigate } from 'react-router-dom';
 import { productsApi, productComponentsApi } from '@/lib/api';
+import { randomUuid } from '@/lib/randomUuid';
 import { DashboardLayout } from '@/components/layouts/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -97,7 +98,7 @@ export default function ProductsPage() {
 
   // Form state for creating
   const [formRows, setFormRows] = useState<ComponentRow[]>([
-    { id: crypto.randomUUID(), component_name: '', component_code: '', quantity: '0' }
+    { id: randomUuid(), component_name: '', component_code: '', quantity: '0' }
   ]);
   const [formRefId, setFormRefId] = useState('');
   const [formProductName, setFormProductName] = useState('');
@@ -225,11 +226,11 @@ export default function ProductsPage() {
   const resetForm = () => {
     setFormRefId('');
     setFormProductName('');
-    setFormRows([{ id: crypto.randomUUID(), component_name: '', component_code: '', quantity: '0' }]);
+    setFormRows([{ id: randomUuid(), component_name: '', component_code: '', quantity: '0' }]);
   };
 
   const addRow = () => {
-    setFormRows([...formRows, { id: crypto.randomUUID(), component_name: '', component_code: '', quantity: '0' }]);
+    setFormRows([...formRows, { id: randomUuid(), component_name: '', component_code: '', quantity: '0' }]);
   };
 
   const removeRow = (id: string) => {
@@ -243,7 +244,7 @@ export default function ProductsPage() {
   };
 
   const addEditRow = () => {
-    setEditRows([...editRows, { id: crypto.randomUUID(), component_name: '', component_code: '', quantity: '0' }]);
+    setEditRows([...editRows, { id: randomUuid(), component_name: '', component_code: '', quantity: '0' }]);
   };
 
   const removeEditRow = (id: string) => {
@@ -580,11 +581,11 @@ export default function ProductsPage() {
                 component_code: c.component_code || '',
                 quantity: c.quantity.toString(),
               }))
-            : [{ id: crypto.randomUUID(), component_name: '', component_code: '', quantity: '0' }]
+            : [{ id: randomUuid(), component_name: '', component_code: '', quantity: '0' }]
         );
       } catch (error) {
         console.error('Error loading components for edit:', error);
-        setEditRows([{ id: crypto.randomUUID(), component_name: '', component_code: '', quantity: '0' }]);
+        setEditRows([{ id: randomUuid(), component_name: '', component_code: '', quantity: '0' }]);
       }
     } else {
       setEditRows(
@@ -595,7 +596,7 @@ export default function ProductsPage() {
               component_code: c.component_code || '',
               quantity: c.quantity.toString(),
             }))
-          : [{ id: crypto.randomUUID(), component_name: '', component_code: '', quantity: '0' }]
+          : [{ id: randomUuid(), component_name: '', component_code: '', quantity: '0' }]
       );
     }
     setIsEditOpen(true);

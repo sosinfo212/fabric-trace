@@ -3,6 +3,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { Navigate } from 'react-router-dom';
 import { backupsApi } from '@/lib/api';
+import { randomUuid } from '@/lib/randomUuid';
 import { DashboardLayout } from '@/components/layouts/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -88,7 +89,7 @@ export default function BackupsPage() {
 
       // Add to history
       const newBackup: BackupHistory = {
-        id: crypto.randomUUID(),
+        id: randomUuid(),
         date: new Date(),
         tables: selectedTables,
         size: `${(blob.size / 1024).toFixed(2)} KB`,

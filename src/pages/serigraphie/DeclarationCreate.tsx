@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { serigraphieDeclarationApi, serigraphieRebutApi, type SerigraphieComponent } from '@/lib/api';
+import { randomUuid } from '@/lib/randomUuid';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { DashboardLayout } from '@/components/layouts/DashboardLayout';
@@ -106,7 +107,7 @@ export default function SerigraphieDeclarationCreatePage() {
     setQualityRows((prev) => [
       ...prev,
       {
-        id: crypto.randomUUID(),
+        id: randomUuid(),
         component_id: '',
         component_name: '',
         qty_nc: '',
