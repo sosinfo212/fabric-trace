@@ -103,6 +103,12 @@ export default function FabOrderViewPage() {
   }
 
   const totalQty = order.pf_qty + order.tester_qty + order.set_qty;
+  const fab = order as typeof order & {
+    client_designation?: string | null;
+    client_name?: string | null;
+  };
+  const clientDisplay =
+    fab.client_designation?.trim() || fab.client_name?.trim() || fab.client_id || '-';
 
   return (
     <DashboardLayout>
@@ -149,12 +155,12 @@ export default function FabOrderViewPage() {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Client</p>
-                  <p className="font-medium">{order.client_id || '-'}</p>
+                  <p className="font-medium">{clientDisplay}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Chaîne</p>
                   <p className="font-medium">
-                    {order.chaines?.num_chaine ? `Chaîne ${order.chaines.num_chaine}` : '-'}
+                    {order.chaines != null ? `Chaîne ${order.chaines.num_chaine}` : '-'}
                   </p>
                 </div>
                 <div>

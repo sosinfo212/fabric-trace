@@ -3267,22 +3267,38 @@ app.get('/api/fab-orders', authenticateToken, async (req, res) => {
   try {
     const [orders] = await pool.execute(
       `SELECT fo.*, c.num_chaine, c.responsable_qlty_id,
-       COALESCE(rq.full_name, rq.email) as responsable_qlty_name
+       COALESCE(rq.full_name, rq.email) as responsable_qlty_name,
+       COALESCE(fo.prod_name, p_id.product_name, p_ref.product_name) AS prod_name_resolved,
+       COALESCE(fo.product_id, p_ref.id) AS product_id_resolved
        FROM fab_orders fo
        LEFT JOIN chaines c ON fo.chaine_id = c.id
        LEFT JOIN profiles rq ON c.responsable_qlty_id = rq.id
+       LEFT JOIN products p_id ON p_id.id = fo.product_id
+       LEFT JOIN products p_ref ON fo.product_id IS NULL
+         AND fo.prod_ref IS NOT NULL AND TRIM(fo.prod_ref) <> ''
+         AND LOWER(TRIM(p_ref.ref_id)) = LOWER(TRIM(fo.prod_ref))
        ORDER BY fo.creation_date_of DESC`
     );
     
     // Format to match expected structure
-    const formattedOrders = orders.map((order) => ({
-      ...order,
-      chaines: order.num_chaine ? {
-        id: order.chaine_id,
-        num_chaine: order.num_chaine,
-        responsable_qlty_name: order.responsable_qlty_name || null
-      } : null
-    }));
+    const formattedOrders = orders.map((order) => {
+      const {
+        prod_name_resolved,
+        product_id_resolved,
+        ...rest
+      } = order;
+      return {
+        ...rest,
+        prod_name: prod_name_resolved != null ? prod_name_resolved : rest.prod_name,
+        product_id: product_id_resolved != null ? product_id_resolved : rest.product_id,
+        // num_chaine can be 0 — do not use truthiness on it
+        chaines: order.chaine_id != null ? {
+          id: order.chaine_id,
+          num_chaine: order.num_chaine,
+          responsable_qlty_name: order.responsable_qlty_name || null
+        } : null
+      };
+    });
     
     res.json(formattedOrders);
   } catch (error) {
@@ -3295,11 +3311,16 @@ app.get('/api/fab-orders/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const [orders] = await pool.execute(
-      `SELECT fo.*, c.num_chaine, cl.name as client_name, p.product_name
+      `SELECT fo.*, c.num_chaine, cl.name as client_name, cl.designation as client_designation,
+       COALESCE(fo.prod_name, p_id.product_name, p_ref.product_name) AS prod_name_resolved,
+       COALESCE(fo.product_id, p_ref.id) AS product_id_resolved
        FROM fab_orders fo
        LEFT JOIN chaines c ON fo.chaine_id = c.id
        LEFT JOIN clients cl ON fo.client_id = cl.id
-       LEFT JOIN products p ON fo.product_id = p.id
+       LEFT JOIN products p_id ON p_id.id = fo.product_id
+       LEFT JOIN products p_ref ON fo.product_id IS NULL
+         AND fo.prod_ref IS NOT NULL AND TRIM(fo.prod_ref) <> ''
+         AND LOWER(TRIM(p_ref.ref_id)) = LOWER(TRIM(fo.prod_ref))
        WHERE fo.id = ?`,
       [id]
     );
@@ -3307,12 +3328,19 @@ app.get('/api/fab-orders/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Commande non trouvée' });
     }
     
-    const order = orders[0];
+    const row = orders[0];
+    const {
+      prod_name_resolved,
+      product_id_resolved,
+      ...orderRest
+    } = row;
     const formattedOrder = {
-      ...order,
-      chaines: order.num_chaine ? {
-        id: order.chaine_id,
-        num_chaine: order.num_chaine
+      ...orderRest,
+      prod_name: prod_name_resolved != null ? prod_name_resolved : orderRest.prod_name,
+      product_id: product_id_resolved != null ? product_id_resolved : orderRest.product_id,
+      chaines: row.chaine_id != null ? {
+        id: row.chaine_id,
+        num_chaine: row.num_chaine
       } : null
     };
     
@@ -3332,6 +3360,20 @@ app.post('/api/fab-orders', authenticateToken, async (req, res) => {
     } = req.body;
     const id = uuidv4();
 
+    const refTrimmed = trimProdRef(prod_ref);
+    let finalProductId = product_id ? safeStr(product_id) : null;
+    let finalProdName = prod_name ? safeStr(prod_name) : null;
+    if (refTrimmed) {
+      const resolved = await resolveFabOrderProductFromRef(pool, refTrimmed);
+      if (resolved) {
+        finalProductId = resolved.id;
+        finalProdName = resolved.product_name;
+      } else {
+        finalProductId = null;
+        finalProdName = null;
+      }
+    }
+
     await pool.execute(
       `INSERT INTO fab_orders (
         id, of_id, product_id, prod_ref, prod_name, chaine_id, sale_order_id, client_id,
@@ -3339,8 +3381,9 @@ app.post('/api/fab-orders', authenticateToken, async (req, res) => {
         instruction, comment, statut_of
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        id, of_id, product_id || null, prod_ref || null, prod_name || null, chaine_id, sale_order_id, client_id,
-        date_fabrication || null, pf_qty || 0, sf_qty || 0, set_qty || 0, tester_qty || 0, lot_set || '',
+        id, of_id, finalProductId, refTrimmed, finalProdName, chaine_id, sale_order_id, client_id,
+        toMySQLDateTime(date_fabrication),
+        pf_qty || 0, sf_qty || 0, set_qty || 0, tester_qty || 0, lot_set || '',
         instruction || null, comment || null, statut_of || 'Planifié'
       ]
     );
@@ -3360,6 +3403,30 @@ function safeStr(v) {
   return typeof v === 'object' ? (v.id != null ? String(v.id) : null) : String(v);
 }
 
+/** Trimmed product reference from fab_orders / import → products.ref_id + product_name */
+function trimProdRef(prod_ref) {
+  if (prod_ref == null || prod_ref === '') return null;
+  const s = typeof prod_ref === 'object' && prod_ref != null && prod_ref.id != null
+    ? String(prod_ref.id)
+    : String(prod_ref);
+  const t = s.trim();
+  return t === '' ? null : t;
+}
+
+async function resolveFabOrderProductFromRef(pool, refTrimmed) {
+  if (!refTrimmed) return null;
+  const [rows] = await pool.execute(
+    'SELECT id, product_name FROM products WHERE TRIM(ref_id) = ? LIMIT 1',
+    [refTrimmed]
+  );
+  if (rows.length > 0) return rows[0];
+  const [rowsCi] = await pool.execute(
+    'SELECT id, product_name FROM products WHERE LOWER(TRIM(ref_id)) = LOWER(?) LIMIT 1',
+    [refTrimmed]
+  );
+  return rowsCi.length > 0 ? rowsCi[0] : null;
+}
+
 app.put('/api/fab-orders/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
@@ -3373,15 +3440,37 @@ app.put('/api/fab-orders/:id', authenticateToken, async (req, res) => {
       fields.push('of_id = ?');
       values.push(safeStr(updateData.of_id) ?? updateData.of_id);
     }
+    let skipStandaloneProductFields = false;
     if (updateData.prod_ref !== undefined) {
+      skipStandaloneProductFields = true;
+      const refVal = trimProdRef(updateData.prod_ref);
       fields.push('prod_ref = ?');
-      values.push(safeStr(updateData.prod_ref));
+      values.push(refVal);
+      if (refVal) {
+        const resolved = await resolveFabOrderProductFromRef(pool, refVal);
+        if (resolved) {
+          fields.push('product_id = ?');
+          values.push(resolved.id);
+          fields.push('prod_name = ?');
+          values.push(resolved.product_name);
+        } else {
+          fields.push('product_id = ?');
+          values.push(null);
+          fields.push('prod_name = ?');
+          values.push(null);
+        }
+      } else {
+        fields.push('product_id = ?');
+        values.push(null);
+        fields.push('prod_name = ?');
+        values.push(null);
+      }
     }
-    if (updateData.prod_name !== undefined) {
+    if (!skipStandaloneProductFields && updateData.prod_name !== undefined) {
       fields.push('prod_name = ?');
       values.push(safeStr(updateData.prod_name));
     }
-    if (updateData.product_id !== undefined) {
+    if (!skipStandaloneProductFields && updateData.product_id !== undefined) {
       fields.push('product_id = ?');
       values.push(safeStr(updateData.product_id));
     }

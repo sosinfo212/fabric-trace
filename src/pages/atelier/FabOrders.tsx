@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fabOrdersApi, chainsApi, clientsApi } from '@/lib/api';
@@ -41,6 +41,15 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from '@/hooks/use-toast';
 import { 
   Plus, 
@@ -51,7 +60,8 @@ import {
   Upload, 
   Loader2,
   MoreHorizontal,
-  RefreshCw
+  RefreshCw,
+  FileDown,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -61,6 +71,14 @@ import {
   countVisibleTableColumns,
   type TableColumnDef,
 } from '@/hooks/use-table-column-visibility';
+import {
+  readFabOrdersExcelWorkbook,
+  validateFabOrdersDataRows,
+  downloadFabOrdersImportTemplate,
+  FAB_ORDERS_EXCEL_HEADERS,
+  type FabOrderImportRowError,
+  type FabOrderImportPayload,
+} from '@/lib/fabOrdersExcelImport';
 
 const STATUS_OPTIONS = ['Planifié', 'En cours', 'Réalisé', 'Cloturé', 'Suspendu'] as const;
 
@@ -160,6 +178,15 @@ export default function FabOrdersPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false);
+  const excelInputRef = useRef<HTMLInputElement>(null);
+  const [excelImportOpen, setExcelImportOpen] = useState(false);
+  const [excelImporting, setExcelImporting] = useState(false);
+  const [excelImportView, setExcelImportView] = useState<
+    | { kind: 'header'; errors: string[] }
+    | { kind: 'rows'; errors: FabOrderImportRowError[] }
+    | { kind: 'ready'; payloads: FabOrderImportPayload[] }
+    | null
+  >(null);
 
   const { isVisible, toggle, reset, optionalColumns, visibility } = useTableColumnVisibility(
     'atelier-fab-orders',
@@ -340,6 +367,99 @@ export default function FabOrdersPage() {
     }
   };
 
+  const handleExcelFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!/\.xlsx?$/i.test(file.name)) {
+      toast({
+        title: 'Fichier invalide',
+        description: 'Utilisez un fichier Excel (.xlsx).',
+        variant: 'destructive',
+      });
+      return;
+    }
+    try {
+      const buf = await file.arrayBuffer();
+      const { headerErrors, dataRows } = readFabOrdersExcelWorkbook(buf);
+      if (headerErrors.length > 0) {
+        setExcelImportView({ kind: 'header', errors: headerErrors });
+        setExcelImportOpen(true);
+        return;
+      }
+      const [allOrders, clientsData, chainesData] = await Promise.all([
+        fabOrdersApi.getAll(),
+        clientsApi.getAll(),
+        chainsApi.getAll(),
+      ]);
+      const existingOfIds = new Set(
+        (allOrders as { of_id?: string }[])
+          .map((o) => String(o.of_id ?? '').trim())
+          .filter(Boolean)
+      );
+      const chainRows = (chainesData as { id: string; num_chaine: number }[]).map((c) => ({
+        id: c.id,
+        num_chaine: Number(c.num_chaine),
+      }));
+      const clientRows = (clientsData as { id: string; name: string; designation: string | null }[]).map(
+        (c) => ({ id: c.id, name: c.name, designation: c.designation })
+      );
+      const { rowErrors, payloads } = validateFabOrdersDataRows(dataRows, {
+        clients: clientRows,
+        chaines: chainRows,
+        existingOfIds,
+      });
+      if (rowErrors.length > 0) {
+        setExcelImportView({ kind: 'rows', errors: rowErrors });
+        setExcelImportOpen(true);
+        return;
+      }
+      if (payloads.length === 0) {
+        toast({
+          title: 'Aucune ligne à importer',
+          description: 'Ajoutez des lignes sous la ligne d’en-têtes.',
+          variant: 'destructive',
+        });
+        return;
+      }
+      setExcelImportView({ kind: 'ready', payloads });
+      setExcelImportOpen(true);
+    } catch (err) {
+      toast({
+        title: 'Lecture du fichier impossible',
+        description: err instanceof Error ? err.message : 'Erreur inconnue',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const runExcelImport = async () => {
+    if (!excelImportView || excelImportView.kind !== 'ready') return;
+    const payloads = excelImportView.payloads;
+    setExcelImporting(true);
+    const failures: string[] = [];
+    for (const p of payloads) {
+      try {
+        await fabOrdersApi.create(p);
+      } catch (err) {
+        failures.push(`${p.of_id} — ${err instanceof Error ? err.message : 'Erreur'}`);
+      }
+    }
+    setExcelImporting(false);
+    setExcelImportOpen(false);
+    setExcelImportView(null);
+    await queryClient.invalidateQueries({ queryKey: ['fab-orders'] });
+    if (failures.length > 0) {
+      toast({
+        title: `Import : ${payloads.length - failures.length}/${payloads.length} créé(s)`,
+        description: failures.slice(0, 5).join(' · '),
+        variant: 'destructive',
+      });
+    } else {
+      toast({ title: 'Import terminé', description: `${payloads.length} ordre(s) créé(s).` });
+    }
+  };
+
   if (authLoading || roleLoading) {
     return (
       <DashboardLayout>
@@ -374,7 +494,18 @@ export default function FabOrdersPage() {
                 Supprimer ({selectedRows.size})
               </Button>
             )}
-            <Button variant="outline" onClick={() => toast({ title: 'Import Excel', description: 'Fonctionnalité en cours de développement' })}>
+            <input
+              ref={excelInputRef}
+              type="file"
+              className="hidden"
+              accept=".xlsx,.xls"
+              onChange={handleExcelFile}
+            />
+            <Button type="button" variant="outline" onClick={() => downloadFabOrdersImportTemplate()}>
+              <FileDown className="h-4 w-4 mr-2" />
+              Modèle Excel
+            </Button>
+            <Button type="button" variant="outline" onClick={() => excelInputRef.current?.click()}>
               <Upload className="h-4 w-4 mr-2" />
               Importer Excel
             </Button>
@@ -525,7 +656,14 @@ export default function FabOrdersPage() {
                               />
                             </TableCell>
                           )}
-                          {isVisible('client') && <TableCell>{order.client_id || '-'}</TableCell>}
+                          {isVisible('client') && (
+                            <TableCell>
+                              {(() => {
+                                const c = clients?.find((x) => x.id === order.client_id);
+                                return c ? c.designation || c.name : order.client_id || '-';
+                              })()}
+                            </TableCell>
+                          )}
                           {isVisible('sale_order') && <TableCell>{order.sale_order_id}</TableCell>}
                           {isVisible('of_id') && <TableCell className="font-mono">{order.of_id}</TableCell>}
                           {isVisible('product') && <TableCell>{order.prod_name || '-'}</TableCell>}
@@ -540,7 +678,9 @@ export default function FabOrdersPage() {
                                 >
                                   <SelectTrigger className="w-[140px]">
                                     <SelectValue>
-                                      {order.chaines?.num_chaine ? `Chaîne ${order.chaines.num_chaine}` : 'Sélectionner'}
+                                      {order.chaines != null
+                                        ? `Chaîne ${order.chaines.num_chaine}`
+                                        : 'Sélectionner'}
                                     </SelectValue>
                                   </SelectTrigger>
                                   <SelectContent>
@@ -552,7 +692,7 @@ export default function FabOrdersPage() {
                                   </SelectContent>
                                 </Select>
                               ) : (
-                                order.chaines?.num_chaine ? `Chaîne ${order.chaines.num_chaine}` : '-'
+                                order.chaines != null ? `Chaîne ${order.chaines.num_chaine}` : '-'
                               )}
                             </TableCell>
                           )}
@@ -703,6 +843,94 @@ export default function FabOrdersPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog
+        open={excelImportOpen}
+        onOpenChange={(open) => {
+          setExcelImportOpen(open);
+          if (!open) {
+            setExcelImportView(null);
+            setExcelImporting(false);
+          }
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            {excelImportView?.kind === 'header' && (
+              <>
+                <DialogTitle>En-têtes invalides</DialogTitle>
+                <DialogDescription>
+                  La première ligne doit être exactement (dans l’ordre) :{' '}
+                  {FAB_ORDERS_EXCEL_HEADERS.join(', ')}. La colonne Client doit reprendre la désignation du
+                  client telle qu’en fiche client.
+                </DialogDescription>
+              </>
+            )}
+            {excelImportView?.kind === 'rows' && (
+              <>
+                <DialogTitle>Erreurs dans le fichier</DialogTitle>
+                <DialogDescription>
+                  Corrigez le fichier puis réessayez. « Ligne » correspond au numéro de ligne dans Excel.
+                </DialogDescription>
+              </>
+            )}
+            {excelImportView?.kind === 'ready' && (
+              <>
+                <DialogTitle>Confirmer l’import</DialogTitle>
+                <DialogDescription>
+                  {excelImportView.payloads.length} ordre(s) seront créés avec le statut Planifié.
+                </DialogDescription>
+              </>
+            )}
+          </DialogHeader>
+
+          {excelImportView?.kind === 'header' && (
+            <ScrollArea className="max-h-64 rounded-md border p-3">
+              <ul className="list-inside list-disc space-y-1 text-sm">
+                {excelImportView.errors.map((msg, i) => (
+                  <li key={i}>{msg}</li>
+                ))}
+              </ul>
+            </ScrollArea>
+          )}
+
+          {excelImportView?.kind === 'rows' && (
+            <ScrollArea className="max-h-72 rounded-md border p-3">
+              <ul className="space-y-2 text-sm">
+                {excelImportView.errors.map((er, i) => (
+                  <li key={i}>
+                    <span className="font-medium">Ligne {er.excelRow}</span> — {er.message}
+                  </li>
+                ))}
+              </ul>
+            </ScrollArea>
+          )}
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            {excelImportView?.kind === 'ready' ? (
+              <>
+                <Button type="button" variant="outline" onClick={() => setExcelImportOpen(false)} disabled={excelImporting}>
+                  Annuler
+                </Button>
+                <Button type="button" onClick={runExcelImport} disabled={excelImporting}>
+                  {excelImporting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Import…
+                    </>
+                  ) : (
+                    'Importer'
+                  )}
+                </Button>
+              </>
+            ) : (
+              <Button type="button" variant="outline" onClick={() => setExcelImportOpen(false)}>
+                Fermer
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }
