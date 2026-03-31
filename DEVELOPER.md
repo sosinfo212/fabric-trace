@@ -28,7 +28,7 @@
 | Styling | Tailwind CSS + shadcn/ui |
 | Routing | React Router DOM v6 |
 | State Management | TanStack Query (React Query) |
-| Backend | Supabase (Lovable Cloud) |
+| Backend | Supabase |
 | Database | PostgreSQL |
 | Authentication | Supabase Auth |
 | Build Tool | Vite |
@@ -405,7 +405,7 @@ npm run dev
 ```
 
 ### Environment Variables
-The following are auto-configured by Lovable Cloud:
+The following are environment variables:
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_PUBLISHABLE_KEY`
 - `VITE_SUPABASE_PROJECT_ID`
