@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Accidental empty artifacts (root)
+/fab-track@0.0.0
+/node
+/npm

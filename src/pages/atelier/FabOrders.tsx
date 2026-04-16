@@ -149,6 +149,8 @@ type FabOrder = {
   chaine_id: string;
   sale_order_id: string;
   client_id: string;
+  client_name?: string | null;
+  client_designation?: string | null;
   creation_date_of: string;
   date_fabrication: string | null;
   pf_qty: number;
@@ -252,7 +254,9 @@ export default function FabOrdersPage() {
           order.sale_order_id?.toLowerCase().includes(searchLower) ||
           order.prod_name?.toLowerCase().includes(searchLower) ||
           order.prod_ref?.toLowerCase().includes(searchLower) ||
-          order.client_id?.toLowerCase().includes(searchLower)
+          order.client_id?.toLowerCase().includes(searchLower) ||
+          order.client_designation?.toLowerCase().includes(searchLower) ||
+          order.client_name?.toLowerCase().includes(searchLower)
         );
       }
       
@@ -567,7 +571,7 @@ export default function FabOrdersPage() {
                 <SelectContent>
                   <SelectItem value="all">Tous les clients</SelectItem>
                   {clients?.map((client) => (
-                    <SelectItem key={client.id} value={client.name}>
+                    <SelectItem key={client.id} value={client.id}>
                       {client.designation || client.name}
                     </SelectItem>
                   ))}
@@ -660,7 +664,14 @@ export default function FabOrdersPage() {
                             <TableCell>
                               {(() => {
                                 const c = clients?.find((x) => x.id === order.client_id);
-                                return c ? c.designation || c.name : order.client_id || '-';
+                                return (
+                                  order.client_designation?.trim() ||
+                                  order.client_name?.trim() ||
+                                  c?.designation?.trim() ||
+                                  c?.name ||
+                                  order.client_id ||
+                                  '-'
+                                );
                               })()}
                             </TableCell>
                           )}

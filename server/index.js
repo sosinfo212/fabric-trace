@@ -43,7 +43,7 @@ const pool = mysql.createPool({
   host: process.env.DB_HOST || 'localhost',
   port: parseInt(process.env.DB_PORT || '3306'),
   user: process.env.DB_USERNAME || 'root',
-  password: process.env.DB_PASSWORD || 'rootroot',
+  password: process.env.DB_PASSWORD || '',
   database: process.env.DB_DATABASE || 'pcd_db',
   waitForConnections: true,
   connectionLimit: 10,
@@ -3267,11 +3267,13 @@ app.get('/api/fab-orders', authenticateToken, async (req, res) => {
   try {
     const [orders] = await pool.execute(
       `SELECT fo.*, c.num_chaine, c.responsable_qlty_id,
+       cl.name as client_name, cl.designation as client_designation,
        COALESCE(rq.full_name, rq.email) as responsable_qlty_name,
        COALESCE(fo.prod_name, p_id.product_name, p_ref.product_name) AS prod_name_resolved,
        COALESCE(fo.product_id, p_ref.id) AS product_id_resolved
        FROM fab_orders fo
        LEFT JOIN chaines c ON fo.chaine_id = c.id
+       LEFT JOIN clients cl ON fo.client_id = cl.id
        LEFT JOIN profiles rq ON c.responsable_qlty_id = rq.id
        LEFT JOIN products p_id ON p_id.id = fo.product_id
        LEFT JOIN products p_ref ON fo.product_id IS NULL
