@@ -802,7 +802,28 @@ export interface CreatePackingListInput {
   deleted_items?: number[];
 }
 
+export type PackingProgressionRow = {
+  id: number;
+  container: string;
+  client: string;
+  proforma: string;
+  date: string;
+  status: string;
+  created_at?: string;
+  updated_at?: string;
+};
+
 export const packingApi = {
+  getProgression: async (statuses: string[]) => {
+    const sp = new URLSearchParams();
+    statuses.forEach((s) => sp.append('status', s));
+    const q = sp.toString();
+    const suffix = q ? `?${q}` : '';
+    // Nested path is canonical; avoids 404 if an older API build only registered /packing/progression.
+    return apiRequest<{ success: boolean; data: PackingProgressionRow[] }>(
+      `/shipping/packing/progression${suffix}`,
+    ).then((r) => r.data);
+  },
   getAll: async () => apiRequest<{ success: boolean; data: any[] }>('/shipping/packing').then((r) => r.data),
   getOne: async (id: number) =>
     apiRequest<{ success: boolean; data: PackingListWithRelations }>(`/shipping/packing/${id}`).then((r) => r.data),
@@ -879,6 +900,97 @@ export const packingApi = {
     }),
 };
 
+export interface PackingReceptionRowDto {
+  id: number;
+  packingListItemId: number;
+  palNo: string;
+  datetime: string | null;
+  persons: string[];
+  boxesReceived: number;
+  piecesReceived: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface PackingReceptionItemDto {
+  id: number;
+  packingListId: number;
+  palNo: string;
+  typePal: string;
+  palKgs: number | null;
+  status: string;
+  statutPal: string;
+  designation: string;
+  quantity: number;
+  boxes: number;
+  pieces: number;
+  order: number;
+  batchNbr: string | null;
+  manufacturingDate: string | null;
+  expiryDate: string | null;
+  receptions: PackingReceptionRowDto[];
+  latestReception: PackingReceptionRowDto | null;
+  lineStatus: 'planifie' | 'en_cours' | 'realise';
+  restePieces: number | null;
+  resteBoxes: number | null;
+  recuTotalPieces: number | null;
+  piecesParBox: number;
+}
+
+export interface PackingReceptionShowData {
+  id: number;
+  proforma: string;
+  client: string;
+  container: string;
+  date: string;
+  status: string;
+  items: PackingReceptionItemDto[];
+}
+
+export const packingReceptionApi = {
+  getShow: async (packingListId: number) =>
+    apiRequest<{ success: boolean; data: PackingReceptionShowData }>(
+      `/shipping/packing-reception/${packingListId}`,
+    ).then((r) => r.data),
+  saveKgs: async (packingListId: number, items: Array<{ id: number; pal_kgs: number | null; statut_pal: string }>) =>
+    apiRequest<{ success: boolean; message: string }>(`/shipping/packing-reception/${packingListId}/save-kgs`, {
+      method: 'POST',
+      body: JSON.stringify({ items }),
+    }),
+  createReception: async (body: {
+    packing_list_item_id: number;
+    pal_no: string;
+    datetime: string;
+    boxes_received: number;
+    pieces_received?: number;
+  }) =>
+    apiRequest<{ success: boolean; message: string }>('/shipping/packing-reception/receptions', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  updateReception: async (
+    receptionId: number,
+    body: { datetime: string; boxes_received: number; pieces_received?: number },
+  ) =>
+    apiRequest<{ success: boolean; message: string }>(`/shipping/packing-reception/receptions/${receptionId}`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
+  updatePersons: async (packing_list_item_id: number, persons: string[]) =>
+    apiRequest<{ success: boolean; message: string }>('/shipping/packing-reception/receptions/persons', {
+      method: 'POST',
+      body: JSON.stringify({ packing_list_item_id, persons }),
+    }),
+  getReceptionsForItem: async (itemId: number) =>
+    apiRequest<{ success: boolean; data: PackingReceptionRowDto[] }>(
+      `/shipping/packing-reception/items/${itemId}/receptions`,
+    ).then((r) => r.data),
+  getHistorique: async (itemId: number) =>
+    apiRequest<{ success: boolean; data: PackingReceptionRowDto[] }>(
+      `/shipping/packing-reception/items/${itemId}/historique`,
+    ).then((r) => r.data),
+};
+
 // Product Components API
 export const productComponentsApi = {
   getByProduct: async (productId: string) => {
@@ -905,7 +1017,16 @@ export const productComponentsApi = {
     });
   },
 
-  importFromCSV: async (rows: Array<{ ref_id: string; component_name: string; component_code?: string; quantity: string | number }>) => {
+  importFromCSV: async (rows: Array<{
+    ref_id: string;
+    product_name: string;
+    component_name: string;
+    component_code?: string;
+    quantity: string | number;
+    image_url?: string;
+    created_at?: string;
+    updated_at?: string;
+  }>) => {
     return apiRequest<{
       success: boolean;
       summary: { total: number; imported: number; errors: number; skipped: number };

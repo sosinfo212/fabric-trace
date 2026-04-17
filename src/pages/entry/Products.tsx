@@ -428,7 +428,7 @@ export default function ProductsPage() {
 
       // Parse header
       const header = parseCSVLine(lines[0]).map(h => h.trim().toLowerCase().replace(/^"|"$/g, ''));
-      const requiredHeaders = ['ref_id', 'component_name', 'quantity'];
+      const requiredHeaders = ['ref_id', 'product_name', 'component_name', 'quantity'];
       const missingHeaders = requiredHeaders.filter(h => !header.includes(h));
 
       if (missingHeaders.length > 0) {
@@ -461,9 +461,13 @@ export default function ProductsPage() {
         // Map to expected format
         rows.push({
           ref_id: row.ref_id || '',
+          product_name: row.product_name || '',
           component_name: row.component_name || '',
           component_code: row.component_code || '',
           quantity: row.quantity || '0',
+          image_url: row.image_url || '',
+          created_at: row.created_at || '',
+          updated_at: row.updated_at || '',
         });
       }
 
@@ -704,11 +708,11 @@ export default function ProductsPage() {
                   <div className="space-y-4 py-4">
                     <div className="space-y-2">
                       <p className="text-sm text-muted-foreground">
-                        Format CSV attendu: <code className="bg-muted px-1 py-0.5 rounded">ref_id,component_name,component_code,quantity</code>
+                        Format CSV attendu: <code className="bg-muted px-1 py-0.5 rounded">id,ref_id,product_name,component_name,component_code,quantity,image_url,created_at,updated_at</code>
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        Les colonnes requises sont: <strong>ref_id</strong>, <strong>component_name</strong>, <strong>quantity</strong>. 
-                        <strong>component_code</strong> est optionnel.
+                        Les colonnes requises sont: <strong>ref_id</strong>, <strong>product_name</strong>, <strong>component_name</strong>, <strong>quantity</strong>. 
+                        <strong>id</strong> (CSV), <strong>component_code</strong>, <strong>image_url</strong>, <strong>created_at</strong>, <strong>updated_at</strong> sont optionnels.
                       </p>
                     </div>
                     <div>

@@ -11,6 +11,7 @@ import { registerWasteHorsProdRoutes } from './rebutHorsProd.js';
 import { registerUnifiedRebutReportRoutes } from './unifiedRebutReport.js';
 import { registerLaboratoireRoutes } from './laboratoire.js';
 import { registerPackingRoutes } from './packing.js';
+import { registerPackingReceptionRoutes } from './packingReception.js';
 
 dotenv.config();
 
@@ -2152,8 +2153,9 @@ app.get('/api/injection/rebut-options', authenticateToken, async (req, res) => {
 
 // Import product components from CSV (MUST be before /api/products/:id/components to avoid route conflict)
 app.post('/api/products/components/import', authenticateToken, async (req, res) => {
+  const connection = await pool.getConnection();
   try {
-    const { rows } = req.body; // Array of { ref_id, component_name, component_code, quantity }
+    const { rows } = req.body; // Array of CSV rows including ref_id/product_name/component_name/etc.
 
     if (!Array.isArray(rows) || rows.length === 0) {
       return res.status(400).json({ error: 'Aucune donnée à importer' });
@@ -2165,101 +2167,161 @@ app.post('/api/products/components/import', authenticateToken, async (req, res) 
       skipped: [],
     };
 
+    const groups = new Map();
+
     for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
-      const lineNumber = i + 2; // +2 because line 1 is header, and arrays are 0-indexed
+      const row = rows[i] || {};
+      const lineNumber = i + 2; // +2 because line 1 is header, arrays are 0-indexed
 
-      // Validate required fields
-      if (!row.ref_id || !row.ref_id.trim()) {
-        results.errors.push({
-          line: lineNumber,
-          ref_id: row.ref_id || '',
-          error: 'ref_id manquant',
-        });
-        continue;
-      }
-
-      if (!row.component_name || !row.component_name.trim()) {
-        results.errors.push({
-          line: lineNumber,
-          ref_id: row.ref_id,
-          error: 'component_name manquant',
-        });
-        continue;
-      }
-
-      // Validate quantity
+      const refId = String(row.ref_id || '').trim();
+      const productName = String(row.product_name || '').trim();
+      const componentName = String(row.component_name || '').trim();
+      const componentCodeRaw = row.component_code == null ? '' : String(row.component_code);
+      const componentCode = componentCodeRaw.trim() || null;
       const quantity = parseFloat(row.quantity);
-      if (isNaN(quantity) || quantity < 0) {
+      const imageUrlRaw = row.image_url == null ? '' : String(row.image_url);
+      const imageUrl = imageUrlRaw.trim() || null;
+      const createdAt = toMySQLDateTime(row.created_at);
+      const updatedAt = toMySQLDateTime(row.updated_at);
+
+      if (!refId) {
+        results.errors.push({ line: lineNumber, ref_id: '', error: 'ref_id manquant' });
+        continue;
+      }
+      if (!productName) {
+        results.errors.push({ line: lineNumber, ref_id: refId, error: 'product_name manquant' });
+        continue;
+      }
+      if (!componentName) {
+        results.errors.push({ line: lineNumber, ref_id: refId, error: 'component_name manquant' });
+        continue;
+      }
+      if (!Number.isFinite(quantity) || quantity < 0) {
         results.errors.push({
           line: lineNumber,
-          ref_id: row.ref_id,
+          ref_id: refId,
           error: 'quantity invalide (doit être un nombre >= 0)',
         });
         continue;
       }
 
-      let productId = null;
-      try {
-        // Find product by ref_id
-        const [products] = await pool.execute(
-          'SELECT id FROM products WHERE ref_id = ?',
-          [row.ref_id.trim()]
-        );
-
-        if (products.length === 0) {
+      let group = groups.get(refId);
+      if (!group) {
+        group = {
+          ref_id: refId,
+          product_name: productName,
+          image_url: imageUrl,
+          created_at: createdAt,
+          updated_at: updatedAt,
+          rows: [],
+          invalid: false,
+        };
+        groups.set(refId, group);
+      } else {
+        if (group.product_name !== productName) {
+          group.invalid = true;
           results.errors.push({
             line: lineNumber,
-            ref_id: row.ref_id,
-            error: `Produit avec ref_id "${row.ref_id}" non trouvé`,
+            ref_id: refId,
+            error: `product_name incohérent pour ref_id "${refId}"`,
           });
           continue;
         }
-
-        productId = products[0].id;
-
-        // Insert component (duplicates are allowed)
-        const componentId = uuidv4();
-        await pool.execute(
-          'INSERT INTO product_components (id, product_id, component_name, component_code, quantity) VALUES (?, ?, ?, ?, ?)',
-          [
-            componentId,
-            productId,
-            row.component_name.trim(),
-            row.component_code?.trim() || null,
-            quantity,
-          ]
-        );
-
-        results.success.push({
-          line: lineNumber,
-          ref_id: row.ref_id,
-          component_name: row.component_name,
-          product_id: productId,
-        });
-      } catch (error) {
-        console.error(`Error importing line ${lineNumber}:`, error);
-        // If it's a duplicate key error, still count it as success (duplicates are allowed)
-        if (error.code === 'ER_DUP_ENTRY' || error.message?.includes('Duplicate entry')) {
-          // Try to get productId if not already set
-          if (!productId) {
-            const [products] = await pool.execute(
-              'SELECT id FROM products WHERE ref_id = ?',
-              [row.ref_id.trim()]
-            );
-            productId = products.length > 0 ? products[0].id : null;
-          }
-          results.success.push({
-            line: lineNumber,
-            ref_id: row.ref_id,
-            component_name: row.component_name,
-            product_id: productId,
-          });
-        } else {
+        if ((group.image_url || null) !== (imageUrl || null)) {
+          group.invalid = true;
           results.errors.push({
             line: lineNumber,
+            ref_id: refId,
+            error: `image_url incohérent pour ref_id "${refId}"`,
+          });
+          continue;
+        }
+      }
+
+      group.rows.push({
+        line: lineNumber,
+        ref_id: refId,
+        product_name: productName,
+        component_name: componentName,
+        component_code: componentCode,
+        quantity,
+      });
+    }
+
+    for (const group of groups.values()) {
+      if (group.invalid || group.rows.length === 0) {
+        continue;
+      }
+
+      await connection.beginTransaction();
+      try {
+        let productId = null;
+
+        const [existingProducts] = await connection.execute(
+          'SELECT id FROM products WHERE ref_id = ? LIMIT 1',
+          [group.ref_id]
+        );
+
+        if (existingProducts.length > 0) {
+          productId = existingProducts[0].id;
+          if (group.updated_at) {
+            await connection.execute(
+              'UPDATE products SET product_name = ?, image_url = ?, updated_at = ? WHERE id = ?',
+              [group.product_name, group.image_url, group.updated_at, productId]
+            );
+          } else {
+            await connection.execute(
+              'UPDATE products SET product_name = ?, image_url = ?, updated_at = NOW() WHERE id = ?',
+              [group.product_name, group.image_url, productId]
+            );
+          }
+        } else {
+          productId = uuidv4();
+          if (group.created_at || group.updated_at) {
+            await connection.execute(
+              'INSERT INTO products (id, ref_id, product_name, image_url, created_at, updated_at) VALUES (?, ?, ?, ?, COALESCE(?, NOW()), COALESCE(?, NOW()))',
+              [productId, group.ref_id, group.product_name, group.image_url, group.created_at, group.updated_at]
+            );
+          } else {
+            await connection.execute(
+              'INSERT INTO products (id, ref_id, product_name, image_url) VALUES (?, ?, ?, ?)',
+              [productId, group.ref_id, group.product_name, group.image_url]
+            );
+          }
+        }
+
+        // Replace strategy: remove previous components then insert imported ones.
+        await connection.execute('DELETE FROM product_components WHERE product_id = ?', [productId]);
+
+        for (const componentRow of group.rows) {
+          const componentId = uuidv4();
+          await connection.execute(
+            'INSERT INTO product_components (id, product_id, component_name, component_code, quantity) VALUES (?, ?, ?, ?, ?)',
+            [
+              componentId,
+              productId,
+              componentRow.component_name,
+              componentRow.component_code,
+              componentRow.quantity,
+            ]
+          );
+          results.success.push({
+            line: componentRow.line,
+            ref_id: componentRow.ref_id,
+            component_name: componentRow.component_name,
+            product_id: productId,
+          });
+        }
+
+        await connection.commit();
+      } catch (groupError) {
+        await connection.rollback();
+        console.error(`Error importing ref_id ${group.ref_id}:`, groupError);
+        for (const row of group.rows) {
+          results.errors.push({
+            line: row.line,
             ref_id: row.ref_id,
-            error: error.message || 'Erreur lors de l\'importation',
+            error: groupError.message || 'Erreur lors de l\'importation du groupe',
           });
         }
       }
@@ -2276,8 +2338,10 @@ app.post('/api/products/components/import', authenticateToken, async (req, res) 
       details: results,
     });
   } catch (error) {
-    console.error('Import components error:', error);
-    res.status(500).json({ error: 'Erreur lors de l\'importation des composants' });
+    console.error('Import products/components error:', error);
+    res.status(500).json({ error: 'Erreur lors de l\'importation des produits/composants' });
+  } finally {
+    connection.release();
   }
 });
 
@@ -3745,6 +3809,7 @@ registerWasteHorsProdRoutes(app, pool, authenticateToken);
 registerUnifiedRebutReportRoutes(app, pool, authenticateToken);
 registerLaboratoireRoutes(app, pool, authenticateToken);
 registerPackingRoutes(app, pool, authenticateToken);
+registerPackingReceptionRoutes(app, pool, authenticateToken);
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
