@@ -11,7 +11,6 @@ import { registerWasteHorsProdRoutes } from './rebutHorsProd.js';
 import { registerUnifiedRebutReportRoutes } from './unifiedRebutReport.js';
 import { registerLaboratoireRoutes } from './laboratoire.js';
 import { registerPackingRoutes } from './packing.js';
-import { registerPackingReceptionRoutes } from './packingReception.js';
 
 dotenv.config();
 
@@ -3809,7 +3808,6 @@ registerWasteHorsProdRoutes(app, pool, authenticateToken);
 registerUnifiedRebutReportRoutes(app, pool, authenticateToken);
 registerLaboratoireRoutes(app, pool, authenticateToken);
 registerPackingRoutes(app, pool, authenticateToken);
-registerPackingReceptionRoutes(app, pool, authenticateToken);
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
